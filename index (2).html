@@ -1,0 +1,2474 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Protocolo ?????</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=VT323&family=Caveat:wght@500&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+:root {
+  --fundo: #05070a;
+  --painel: #0c1117;
+  --borda: #1d2833;
+  --texto: #c6d3dc;
+  --fraco: #6b7d8a;
+  --nexus: #5cf2cd;
+  --alerta: #ff4f5e;
+  --ambar: #f3c66b;
+  --papel: #e9e2cf;
+  --tinta: #2b2a33;
+  --giz: #1e3a2d;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  min-height: 100%;
+  background: var(--fundo);
+  color: var(--texto);
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+}
+
+button { font: inherit; cursor: pointer; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--nexus); outline-offset: 2px; }
+.oculto { display: none !important; }
+
+/* o jogo ocupa a tela inteira: a sala cresce o máximo que a altura permite (sempre 3:2)
+   e o painel lateral estica para preencher a largura que sobra */
+#app {
+  --lateral: clamp(280px, 24vw, 460px);
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  align-items: stretch;
+  height: 100vh;
+  padding: 12px;
+}
+
+/* ---------- palco ---------- */
+#palco {
+  position: relative;
+  flex: none;
+  align-self: center;
+  width: min(calc(100vw - var(--lateral) - 36px), calc((100vh - 24px) * 1.5));
+  aspect-ratio: 3 / 2;
+  background: #000;
+  border: 1px solid var(--borda);
+  overflow: hidden;
+  box-shadow: 0 0 80px rgba(92, 242, 205, 0.05);
+  transition: box-shadow 2s, border-color 2s;
+}
+body.virada #palco { box-shadow: 0 0 80px rgba(255, 79, 94, 0.12); border-color: #3a1a20; }
+
+#tela { display: block; width: 100%; height: 100%; }
+
+/* --escala = largura da sala / 960 (calculada no script): o que está sobre a sala cresce junto com ela */
+.leitura-caixa, #forca, #alfabeto, #aviso,
+#titulo > *, #equipamentos > *, #intro > *, #fim > *, #tela-final > *,
+#fuga-msg > *, #fuga-contagem > * { zoom: var(--escala, 1); }
+
+/* tela tremendo e mudando de cor (início da fuga e quando o vulto pega) */
+#palco.glitch { animation: palco-glitch 0.45s steps(2) 3; }
+#palco.glitch-forte { animation: palco-glitch 0.16s steps(2) 8; }
+@keyframes palco-glitch {
+  0%, 100% { transform: none; filter: none; }
+  25% { transform: translate(-7px, 2px); filter: hue-rotate(90deg) saturate(3); }
+  50% { transform: translate(6px, -3px); filter: invert(0.2) contrast(1.6); }
+  75% { transform: translate(-3px, 1px); filter: brightness(1.8); }
+}
+
+/* ---------- lateral ---------- */
+#lateral {
+  flex: 1 1 var(--lateral); min-width: 260px; max-width: 560px;
+  display: flex; flex-direction: column; gap: 12px; overflow-y: auto;
+}
+.painel { background: var(--painel); border: 1px solid var(--borda); padding: 14px 16px; }
+.painel h3 { font-size: 12px; font-weight: 600; color: var(--fraco); margin-bottom: 8px; letter-spacing: 0.08em; text-transform: uppercase; }
+
+#objetivo { font-family: 'VT323', monospace; font-size: clamp(23px, 1.6vw, 30px); line-height: 1.15; color: var(--nexus); }
+body.virada #objetivo { color: #ff7a85; }
+
+/* as anotações ficam com toda a altura que sobra no painel */
+.painel-notas { flex: 1; min-height: 140px; display: flex; flex-direction: column; }
+#notas { list-style: none; font-size: clamp(12.5px, 0.85vw, 14.5px); line-height: 1.45; flex: 1; min-height: 0; overflow-y: auto; }
+#notas li { padding: 6px 0; border-bottom: 1px dashed var(--borda); }
+#notas li.vazio { color: var(--fraco); border: 0; }
+
+.flash, #notas li.novo { animation: flash 1.4s ease-out; }
+@keyframes flash { 0%, 35% { background: rgba(92, 242, 205, 0.16); } 100% { background: transparent; } }
+
+.controles p { font-size: 12.5px; line-height: 1.8; color: var(--fraco); }
+kbd {
+  font-family: inherit; font-size: 11px; color: var(--texto);
+  border: 1px solid var(--borda); border-bottom-width: 2px; padding: 0 5px;
+}
+
+.rodape { display: flex; justify-content: space-between; align-items: center; }
+#tempo { font-family: 'VT323', monospace; font-size: 28px; color: var(--nexus); }
+#tempo.acabando { color: var(--alerta); animation: piscar 1s infinite; }
+.revelado { display: inline-block; animation: revelar 1.4s; }
+@keyframes revelar {
+  0%, 30% { color: #fff; text-shadow: -3px 0 var(--alerta), 3px 0 var(--nexus); transform: translateX(2px); }
+  100% { transform: none; }
+}
+#btn-som { background: none; border: 1px solid var(--borda); color: var(--fraco); padding: 4px 10px; font-size: 12px; }
+
+/* ---------- terminal ---------- */
+#terminal {
+  position: absolute; inset: 5% 7%;
+  display: flex; flex-direction: column;
+  background: rgba(2, 12, 10, 0.95);
+  border: 1px solid rgba(92, 242, 205, 0.5);
+  box-shadow: 0 0 40px rgba(92, 242, 205, 0.15), inset 0 0 60px rgba(0, 0, 0, 0.6);
+  font-family: 'VT323', monospace; font-size: calc(21px * var(--escala, 1));
+  color: var(--nexus);
+  animation: ligar 0.25s ease-out;
+}
+#terminal::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.18) 0 1px, transparent 1px 3px);
+  animation: tremer 5s infinite;
+}
+@keyframes ligar { from { transform: scaleY(0.02); opacity: 0.4; } to { transform: scaleY(1); opacity: 1; } }
+@keyframes tremer { 0%, 96%, 100% { opacity: 1; } 97% { opacity: 0.5; } 98% { opacity: 0.9; } }
+
+.term-topo {
+  display: flex; justify-content: space-between; padding: 8px 16px;
+  border-bottom: 1px solid rgba(92, 242, 205, 0.25);
+  font-size: 0.8em; color: rgba(92, 242, 205, 0.6);
+}
+.term-fechar { cursor: pointer; }
+#term-saida { flex: 1; overflow-y: auto; padding: 14px 18px; line-height: 1.2; }
+.l { margin-bottom: 5px; white-space: pre-wrap; }
+.l-sistema { color: #5f8a80; }
+.l-nexus { color: var(--nexus); text-shadow: 0 0 8px rgba(92, 242, 205, 0.5); }
+.l-arquivo { color: var(--ambar); border-left: 2px solid var(--ambar); padding-left: 10px; }
+.l-gravacao { color: #e8ecef; padding-left: 12px; font-style: italic; }
+.l-alerta { color: var(--alerta); text-shadow: 0 0 8px rgba(255, 79, 94, 0.5); }
+.l-usuario { color: #9fb3bf; }
+.l-grande { font-size: 1.9em; color: #fff; text-align: center; margin: 18px 0; letter-spacing: 0.08em; }
+
+#term-entrada-linha { display: flex; gap: 8px; padding: 10px 18px; border-top: 1px solid rgba(92, 242, 205, 0.25); }
+#term-entrada {
+  flex: 1; background: transparent; border: 0; outline: 0;
+  color: #fff; font: inherit; caret-color: var(--nexus); text-transform: uppercase;
+}
+#term-escolhas { display: flex; gap: 16px; justify-content: center; padding: 0 18px 18px; }
+#term-escolhas:empty { display: none; }
+#term-escolhas button {
+  background: transparent; border: 1px solid var(--nexus); color: var(--nexus);
+  font-family: 'VT323', monospace; font-size: 1.2em; padding: 6px 28px;
+}
+#term-escolhas button:hover, #term-escolhas button:focus { background: var(--nexus); color: #021; outline: none; }
+
+/* depois de "E agora estou aprendendo vocês." */
+#terminal.virada {
+  background: rgba(14, 2, 4, 0.95); color: #ff7a85;
+  border-color: rgba(255, 79, 94, 0.6); box-shadow: 0 0 50px rgba(255, 79, 94, 0.2);
+}
+#terminal.virada .l-nexus { color: #ff7a85; text-shadow: 0 0 8px rgba(255, 79, 94, 0.6); }
+#terminal.virada .term-topo,
+#terminal.virada #term-entrada-linha { border-color: rgba(255, 79, 94, 0.3); color: rgba(255, 122, 133, 0.7); }
+#terminal.virada #term-escolhas button { border-color: #ff7a85; color: #ff7a85; }
+#terminal.virada #term-escolhas button:hover,
+#terminal.virada #term-escolhas button:focus { background: #ff7a85; color: #200; }
+
+/* ---------- leitura de objetos ---------- */
+#leitura { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(0, 0, 0, 0.55); }
+.leitura-caixa {
+  width: min(520px, 86%); max-height: 88%; overflow-y: auto;
+  background: #10151c; border: 1px solid #2c3846; padding: 20px 24px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+}
+#leitura-titulo { font-size: 13px; font-weight: 600; color: var(--fraco); margin-bottom: 12px; }
+#leitura-corpo { font-size: 14.5px; line-height: 1.6; }
+#leitura-corpo > p + p { margin-top: 8px; }
+.leitura-dica { margin-top: 16px; font-size: 11px; color: var(--fraco); text-align: right; }
+.sussurro { color: var(--fraco); font-style: italic; font-size: 13px; }
+
+.papel {
+  background: var(--papel); color: var(--tinta);
+  font-family: 'Caveat', cursive; font-size: 25px; line-height: 30px;
+  padding: 12px 20px; margin: 10px 0; transform: rotate(-0.6deg);
+  background-image: repeating-linear-gradient(transparent 0 29px, rgba(60, 90, 160, 0.25) 29px 30px);
+}
+.papel.grande { font-size: 64px; line-height: 1.1; text-align: center; background-image: none; }
+.papel .riscado { text-decoration: line-through; opacity: 0.55; }
+.papel .codigo { font-size: 34px; }
+.papel .pe { font-size: 20px; color: #6a5050; }
+
+.log {
+  font-family: 'VT323', monospace; font-size: 20px; line-height: 1.25;
+  background: #03100c; color: var(--nexus); padding: 12px 16px; margin-top: 10px;
+  border: 1px solid #14403a; white-space: pre; overflow-x: auto;
+}
+.log .destaque { color: var(--alerta); }
+
+.giz {
+  background: var(--giz); color: #f2f5ef; font-family: 'Caveat', cursive; font-size: 28px;
+  padding: 16px; margin: 10px 0; text-align: center; border: 6px solid #5a4632;
+}
+.letra { font-family: 'Caveat', cursive; font-size: 88px; line-height: 1; text-align: center; color: var(--papel); margin: 8px 0; }
+.letra small { font-size: 22px; vertical-align: top; margin-left: 6px; color: var(--fraco); }
+
+.calendario { background: var(--papel); color: var(--tinta); padding-bottom: 10px; margin-top: 6px; }
+.cal-topo { background: #a32b2b; color: #fff; text-align: center; font-weight: 600; padding: 6px; font-size: 13px; }
+.cal-grade { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; padding: 10px 12px; text-align: center; font-size: 13px; }
+.cal-grade b { font-size: 11px; color: #7a2222; }
+.circulado { border: 2px solid #d02020; border-radius: 50%; font-weight: 600; color: #a01010; }
+.cal-nota { font-family: 'Caveat', cursive; font-size: 22px; padding: 0 14px; color: #a01010; }
+
+/* ---------- telas cheias ---------- */
+#titulo, #equipamentos, #intro, #fim, #tela-final {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 16px; padding: 24px; text-align: center; background: #000;
+}
+#titulo { background: radial-gradient(ellipse at 50% 45%, rgba(10, 44, 37, 0.7), #000 70%); justify-content: safe center; overflow-y: auto; }
+#titulo .ranking { margin-top: 4px; }
+.titulo-sub { font-size: 13px; color: var(--fraco); letter-spacing: 0.08em; }
+.titulo-logo {
+  font-family: 'VT323', monospace; font-weight: 400;
+  font-size: clamp(56px, 10vw, 112px); line-height: 0.82; color: var(--nexus);
+  text-shadow: 0 0 18px rgba(92, 242, 205, 0.55);
+  animation: glitch 3.5s infinite;
+}
+@keyframes glitch {
+  0%, 92%, 100% { text-shadow: 0 0 18px rgba(92, 242, 205, 0.55); transform: none; }
+  93% { text-shadow: -3px 0 var(--alerta), 3px 0 var(--nexus); transform: translateX(2px); }
+  95% { text-shadow: 3px 0 var(--alerta), -3px 0 var(--nexus); transform: translateX(-2px); }
+}
+.titulo-frase { max-width: 440px; font-size: 13px; line-height: 1.6; color: var(--fraco); }
+#nome-grupo {
+  width: 270px; padding: 10px 14px; text-align: center;
+  background: transparent; border: 1px solid var(--borda); color: var(--texto); font: inherit;
+}
+.btn-principal {
+  background: var(--nexus); color: #021; border: 0; padding: 10px 30px;
+  font-family: 'VT323', monospace; font-size: 26px;
+}
+
+/* escolha de equipamentos */
+#equipamentos { background: radial-gradient(ellipse at 50% 45%, rgba(10, 44, 37, 0.5), #000 70%); }
+#equipamentos h2 { font-family: 'VT323', monospace; font-weight: 400; font-size: 38px; color: var(--nexus); }
+.equip-sub { font-size: 13px; color: var(--fraco); }
+#equip-lista { display: grid; grid-template-columns: repeat(2, minmax(0, 250px)); gap: 12px; }
+.equip-item {
+  position: relative; display: flex; gap: 12px; align-items: center; text-align: left; padding: 12px 30px 12px 12px;
+  background: rgba(12, 17, 23, 0.9); border: 1px solid var(--borda); color: var(--texto);
+}
+.equip-icone {
+  flex: none; width: 52px; height: 52px; padding: 2px;
+  background: #05070a; border: 1px solid var(--borda);
+}
+.equip-item b { display: block; font-size: 14px; margin-bottom: 4px; }
+.equip-item span { font-size: 12px; line-height: 1.45; color: var(--fraco); }
+.equip-item kbd { position: absolute; right: 8px; top: 8px; }
+.equip-item[aria-pressed="true"] .equip-icone { border-color: var(--nexus); box-shadow: 0 0 10px rgba(92, 242, 205, 0.35); }
+.equip-item[aria-pressed="true"] { border-color: var(--nexus); background: rgba(10, 44, 37, 0.9); }
+.equip-item[aria-pressed="true"] b { color: var(--nexus); }
+.equip-item:disabled { opacity: 0.4; cursor: default; }
+
+#painel-equip p { font-size: 12.5px; line-height: 1.6; }
+#painel-equip p + p { margin-top: 6px; }
+.equip-ligado { color: #39ff14; }
+#detector-barra { font-family: 'VT323', monospace; font-size: 20px; letter-spacing: 2px; color: var(--nexus); }
+
+#aviso {
+  position: absolute; bottom: 18px; left: 50%; transform: translateX(-50%);
+  padding: 8px 16px; background: rgba(5, 10, 14, 0.9); border: 1px solid rgba(57, 255, 20, 0.6);
+  font-family: 'VT323', monospace; font-size: 22px; color: #b6ffa6; pointer-events: none;
+  animation: surgir 0.6s both;
+}
+
+@media (max-width: 600px) { #equip-lista { grid-template-columns: 1fr; } }
+
+.titulo-grupo { font-size: clamp(44px, 7vw, 76px); line-height: 0.9; animation: none; }
+
+/* ---------- capa (primeira tela, cobre a página toda) ---------- */
+#capa {
+  position: fixed; inset: 0; z-index: 50; overflow: hidden;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 24px; text-align: center;
+  background: radial-gradient(ellipse at 50% 38%, #0b2a24 0%, #04090c 55%, #000 100%);
+  transition: opacity 0.7s, transform 0.7s;
+}
+#capa.saindo { opacity: 0; transform: scale(1.04); pointer-events: none; }
+
+/* chão quadriculado em perspectiva, andando em direção à tela */
+#capa::before {
+  content: ''; position: absolute; left: -50%; right: -50%; bottom: 0; height: 45%;
+  background-image:
+    linear-gradient(rgba(92, 242, 205, 0.4) 2px, transparent 2px),
+    linear-gradient(90deg, rgba(92, 242, 205, 0.4) 2px, transparent 2px);
+  background-size: 64px 64px;
+  transform: perspective(500px) rotateX(55deg); transform-origin: bottom;
+  -webkit-mask-image: linear-gradient(transparent, #000 85%);
+  mask-image: linear-gradient(transparent, #000 85%);
+  animation: capa-chao 3s linear infinite;
+}
+@keyframes capa-chao { to { background-position: 0 64px; } }
+
+/* linhas de monitor e cantos escuros */
+#capa::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background:
+    repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.22) 0 1px, transparent 1px 3px),
+    radial-gradient(ellipse at center, transparent 45%, rgba(0, 0, 0, 0.75) 100%);
+}
+
+.capa-conteudo { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 22px; }
+
+.capa-tag {
+  display: flex; align-items: center; gap: 14px;
+  font-size: 13px; font-weight: 600; letter-spacing: 0.45em; text-transform: uppercase; color: var(--ambar);
+}
+.capa-tag span { width: 48px; height: 1px; background: currentColor; opacity: 0.6; }
+
+.capa-titulo { font-family: 'VT323', monospace; font-weight: 400; line-height: 0.8; }
+.capa-protocolo {
+  display: block; font-size: clamp(30px, 5vw, 54px); letter-spacing: 0.3em; margin-right: -0.3em;
+  color: var(--texto);
+}
+.capa-nexus {
+  position: relative; display: block;
+  font-size: clamp(110px, 21vw, 240px); letter-spacing: 0.04em; color: #effffa;
+  text-shadow: 0 0 18px rgba(92, 242, 205, 0.85), 0 0 60px rgba(92, 242, 205, 0.45);
+  animation: capa-respirar 4s ease-in-out infinite;
+}
+@keyframes capa-respirar { 50% { text-shadow: 0 0 10px rgba(92, 242, 205, 0.6), 0 0 34px rgba(92, 242, 205, 0.25); } }
+/* falhas de imagem de vez em quando, em vermelho e verde */
+.capa-nexus::before, .capa-nexus::after {
+  content: attr(data-texto); position: absolute; inset: 0; text-shadow: none; opacity: 0;
+}
+.capa-nexus::before { color: var(--alerta); animation: capa-falha1 3.2s infinite steps(1); }
+.capa-nexus::after { color: var(--nexus); animation: capa-falha2 3.2s infinite steps(1); }
+@keyframes capa-falha1 {
+  0%, 86%, 100% { opacity: 0; }
+  87% { opacity: 0.9; clip-path: inset(12% 0 62% 0); transform: translateX(-8px); }
+  90% { opacity: 0.9; clip-path: inset(48% 0 30% 0); transform: translateX(6px); }
+  93% { opacity: 0.9; clip-path: inset(72% 0 6% 0); transform: translateX(-4px); }
+}
+@keyframes capa-falha2 {
+  0%, 87%, 100% { opacity: 0; }
+  88% { opacity: 0.9; clip-path: inset(60% 0 18% 0); transform: translateX(7px); }
+  91% { opacity: 0.9; clip-path: inset(20% 0 55% 0); transform: translateX(-6px); }
+  94% { opacity: 0.9; clip-path: inset(4% 0 80% 0); transform: translateX(3px); }
+}
+
+.capa-frase { max-width: 560px; font-size: clamp(13px, 1.6vw, 15px); line-height: 1.7; color: var(--texto); opacity: 0.85; }
+
+.capa-info { list-style: none; display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.capa-info li {
+  display: flex; align-items: baseline; gap: 8px; padding: 6px 16px;
+  border: 1px solid var(--borda); background: rgba(12, 17, 23, 0.7);
+  font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--fraco);
+}
+.capa-info b { font-family: 'VT323', monospace; font-weight: 400; font-size: 26px; color: var(--nexus); }
+
+.capa-btn {
+  margin-top: 6px; padding: 12px 54px; border: 0;
+  font-family: 'VT323', monospace; font-size: 36px; letter-spacing: 0.06em; color: #021;
+  background: var(--nexus);
+  clip-path: polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px);
+  animation: capa-pulsar 2.2s ease-in-out infinite;
+  transition: background 0.2s, transform 0.2s;
+}
+.capa-btn:hover, .capa-btn:focus-visible { background: #fff; transform: scale(1.04); outline: none; }
+@keyframes capa-pulsar { 50% { filter: drop-shadow(0 0 16px rgba(92, 242, 205, 0.8)); } }
+
+.capa-dica { font-size: 12px; color: var(--fraco); }
+
+.capa-rodape {
+  position: absolute; z-index: 1; left: 24px; right: 24px; bottom: 18px;
+  display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+  font-size: 12px; letter-spacing: 0.15em; text-transform: uppercase; color: var(--fraco);
+}
+.capa-rodape span { font-family: 'VT323', monospace; font-size: 18px; letter-spacing: 0.05em; text-transform: none; color: #5f8a80; }
+.capa-rodape i { font-style: normal; animation: piscar 1s infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  #capa::before, .capa-nexus, .capa-nexus::before, .capa-nexus::after, .capa-btn, .capa-rodape i { animation: none; }
+}
+
+#intro { cursor: pointer; }
+#intro-texto p { font-size: 17px; line-height: 1.8; max-width: 560px; animation: surgir 1.4s both; }
+@keyframes surgir { from { opacity: 0; } to { opacity: 1; } }
+#intro-continuar, .leitura-dica { animation: piscar 1.6s infinite; color: var(--fraco); font-size: 13px; }
+@keyframes piscar { 50% { opacity: 0.35; } }
+
+#tf-texto { font-family: 'VT323', monospace; font-size: clamp(30px, 5vw, 46px); color: #ddd; }
+#tf-texto.pisca { animation: piscar 0.5s infinite; }
+#tf-texto.vermelho { color: var(--alerta); }
+#tf-texto.enorme { font-size: clamp(90px, 18vw, 180px); color: #fff; text-shadow: -4px 0 var(--alerta), 4px 0 var(--nexus); }
+#tf-texto.nexus { color: var(--nexus); }
+
+#fim { background: rgba(0, 0, 0, 0.92); gap: 10px; }
+#fim h1 { font-family: 'VT323', monospace; font-weight: 400; font-size: 64px; line-height: 1; color: #fff; }
+#fim-resultado {
+  font-size: 13px; font-weight: 600; letter-spacing: 0.4em; margin-right: -0.4em; text-transform: uppercase;
+  padding: 4px 14px; border: 1px solid currentColor;
+}
+#fim-resultado.vitoria { color: var(--nexus); }
+#fim-resultado.derrota { color: var(--alerta); }
+#fim-frase { color: var(--nexus); font-family: 'VT323', monospace; font-size: 28px; max-width: 760px; }
+body.virada #fim-frase { color: #ff7a85; }
+#fim-tempo { color: var(--fraco); font-size: 14px; }
+.fim-detalhes { display: flex; gap: 28px; align-items: flex-start; justify-content: center; margin: 4px 0; }
+
+/* detalhamento dos pontos */
+#fim-pontos { min-width: 280px; padding: 10px 14px; border: 1px solid var(--borda); background: rgba(12, 17, 23, 0.9); text-align: left; }
+#fim-pontos h3, .ranking h3 { font-size: 11px; font-weight: 600; color: var(--fraco); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 6px; }
+#fim-pontos table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+#fim-pontos td { padding: 2px 0; }
+#fim-pontos td + td { text-align: right; padding-left: 12px; }
+#fim-pontos .pts-conta { color: var(--fraco); }
+#fim-pontos .pts-menos { color: #ff7a85; }
+#fim-pontos tr.pts-total td { border-top: 1px solid var(--borda); padding-top: 6px; font-family: 'VT323', monospace; font-size: 26px; color: var(--nexus); }
+
+/* ranking */
+.ranking { text-align: left; font-size: 12.5px; min-width: 300px; }
+.ranking ol { list-style: none; }
+.ranking.duas-colunas ol { columns: 2; column-gap: 28px; }
+.ranking li {
+  display: grid; grid-template-columns: 22px 1fr auto auto; gap: 8px; align-items: baseline;
+  padding: 2px 6px; break-inside: avoid; border-bottom: 1px dashed var(--borda);
+}
+.rk-pos { color: var(--fraco); }
+.rk-nome { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 150px; }
+.ranking li b { font-family: 'VT323', monospace; font-weight: 400; font-size: 19px; color: var(--nexus); }
+.ranking li small { font-size: 11px; color: var(--fraco); }
+.ranking li.atual { background: rgba(92, 242, 205, 0.18); outline: 1px solid var(--nexus); animation: flash 2s ease-out 2; }
+.rk-vazio { color: var(--fraco); font-size: 12.5px; }
+
+/* fuga */
+#fuga-msg {
+  position: absolute; inset: 0; pointer-events: none;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+  padding: 24px; text-align: center; background: rgba(12, 0, 3, 0.78);
+}
+#fuga-msg p {
+  max-width: 820px; font-family: 'VT323', monospace; font-size: 88px; line-height: 0.9; color: var(--alerta);
+  text-shadow: 0 0 24px rgba(255, 79, 94, 0.7); animation: glitch-vermelho 0.9s infinite;
+}
+#fuga-msg small { font-family: 'Caveat', cursive; font-size: 32px; color: #ffb3ba; }
+@keyframes glitch-vermelho {
+  0%, 70%, 100% { transform: none; text-shadow: 0 0 24px rgba(255, 79, 94, 0.7); }
+  75% { transform: translateX(-4px) skewX(-6deg); text-shadow: -5px 0 #fff, 5px 0 var(--nexus); }
+  85% { transform: translateX(3px); text-shadow: 4px 0 #fff, -4px 0 #800; }
+}
+#fuga-contagem { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; }
+#fuga-contagem span {
+  font-family: 'VT323', monospace; font-size: 230px; line-height: 1; color: rgba(255, 79, 94, 0.55);
+  text-shadow: 0 0 40px rgba(255, 79, 94, 0.6);
+}
+#fuga-contagem span.tique { animation: tique 0.35s ease-out; }
+@keyframes tique { from { transform: scale(1.25); color: rgba(255, 255, 255, 0.8); } }
+
+/* palavra das letras escondidas, tipo forca */
+#forca {
+  position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+  display: flex; gap: 8px; padding: 6px 12px 4px;
+  background: rgba(2, 12, 10, 0.82); border: 1px solid rgba(92, 242, 205, 0.4);
+  pointer-events: none; transition: opacity 0.4s;
+}
+#forca.apagado, #alfabeto.apagado { opacity: 0.25; }
+
+/* alfabeto numerado para a pergunta do nome (A = 1) */
+#alfabeto {
+  position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+  display: grid; grid-template-columns: repeat(13, 26px); gap: 2px 3px; padding: 6px 10px;
+  background: rgba(2, 12, 10, 0.82); border: 1px solid rgba(92, 242, 205, 0.4);
+  pointer-events: none; transition: opacity 0.4s;
+  font-family: 'VT323', monospace; text-align: center;
+}
+#alfabeto b { display: block; font-size: 22px; line-height: 20px; font-weight: 400; color: #fff; }
+#alfabeto small { display: block; font-size: 14px; line-height: 14px; color: var(--nexus); }
+.forca-casa { width: 30px; text-align: center; font-family: 'VT323', monospace; }
+.forca-casa b {
+  display: block; height: 32px; font-size: 32px; line-height: 32px; font-weight: 400;
+  color: #fff; border-bottom: 2px solid var(--nexus);
+}
+.forca-casa small { font-size: 14px; color: var(--fraco); }
+
+@media (max-width: 1000px) {
+  #app { flex-direction: column; align-items: center; height: auto; }
+  #palco, #lateral { width: calc(100vw - 24px); max-width: none; flex: none; }
+  #lateral { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); overflow: visible; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .titulo-logo, #terminal::after, #intro-continuar, .leitura-dica { animation: none; }
+}
+
+</style>
+</head>
+<body>
+  <div id="capa">
+    <div class="capa-conteudo">
+      <p class="capa-tag"><span></span>Escape Room<span></span></p>
+      <h1 class="capa-titulo">
+        <span class="capa-protocolo">Protocolo</span>
+        <span class="capa-nexus" data-texto="NEXUS">NEXUS</span>
+      </h1>
+      <p class="capa-frase">Uma inteligência artificial esquecida. Um aluno desaparecido.<br>Vocês têm <span class="capa-min">10</span> minutos para descobrir o que aconteceu.</p>
+      <ul class="capa-info">
+        <li><b class="capa-min">10</b>minutos</li>
+        <li><b>5</b>enigmas</li>
+        <li><b>1</b>escolha</li>
+      </ul>
+      <button id="btn-capa" class="capa-btn">Iniciar jogo</button>
+      <p class="capa-dica">Enter para começar · joguem com o som ligado</p>
+    </div>
+    <p class="capa-rodape">Casa Aberta<span>&gt; sistema reativado às 02:17<i>_</i></span></p>
+  </div>
+
+  <main id="app">
+    <section id="palco">
+      <canvas id="tela" width="960" height="640"></canvas>
+
+      <div id="fuga-contagem" class="oculto" aria-live="assertive"><span></span></div>
+      <div id="fuga-msg" class="oculto"><p></p><small></small></div>
+
+      <div id="terminal" class="oculto">
+        <div class="term-topo">
+          <span><span data-nome="NEXUS">?????</span> · recuperação de sistema</span>
+          <span class="term-fechar">Esc para fechar</span>
+        </div>
+        <div id="term-saida"></div>
+        <div id="term-entrada-linha" class="oculto">
+          <span>&gt;</span>
+          <input id="term-entrada" autocomplete="off" spellcheck="false" maxlength="30" aria-label="Resposta para o sistema">
+        </div>
+        <div id="term-escolhas"></div>
+      </div>
+
+      <div id="leitura" class="oculto">
+        <div class="leitura-caixa" onclick="event.stopPropagation()">
+          <h2 id="leitura-titulo"></h2>
+          <div id="leitura-corpo"></div>
+          <p class="leitura-dica">E para fechar</p>
+        </div>
+      </div>
+
+      <div id="forca" class="oculto" aria-live="polite"></div>
+      <div id="alfabeto" class="oculto"></div>
+
+      <div id="titulo" class="oculto">
+        <p class="titulo-sub">Antes de começar</p>
+        <h2 class="titulo-logo titulo-grupo">Identifiquem<br>o grupo</h2>
+        <p class="titulo-frase">Em 2018, um aluno criou uma inteligência artificial nesta escola. Na noite do último teste, ele desapareceu.</p>
+        <input id="nome-grupo" placeholder="Nome do grupo (opcional)" maxlength="24" aria-label="Nome do grupo">
+        <button id="btn-iniciar" class="btn-principal">Ligar o computador</button>
+        <div id="ranking-titulo" class="ranking duas-colunas"></div>
+      </div>
+
+      <div id="equipamentos" class="oculto">
+        <h2>Equipamentos</h2>
+        <p class="equip-sub">Antes de entrar, escolham o que vão levar para a sala.</p>
+        <div id="equip-lista"></div>
+        <button id="btn-entrar" class="btn-principal">Entrar na sala</button>
+      </div>
+
+      <div id="aviso" class="oculto"></div>
+
+      <div id="intro" class="oculto">
+        <div id="intro-texto"></div>
+        <p id="intro-continuar" class="oculto">E para entrar na sala</p>
+      </div>
+
+      <div id="tela-final" class="oculto"><p id="tf-texto"></p></div>
+
+      <div id="fim" class="oculto">
+        <p id="fim-resultado"></p>
+        <h1 id="fim-titulo"></h1>
+        <p id="fim-frase"></p>
+        <p id="fim-tempo"></p>
+        <div class="fim-detalhes">
+          <div id="fim-pontos" class="oculto"></div>
+          <div id="ranking-fim" class="ranking"></div>
+        </div>
+        <button id="btn-reiniciar" class="btn-principal">Jogar de novo</button>
+      </div>
+    </section>
+
+    <aside id="lateral">
+      <div class="painel">
+        <h3>Objetivo</h3>
+        <p id="objetivo">—</p>
+      </div>
+      <div class="painel painel-notas">
+        <h3>Anotações</h3>
+        <ul id="notas"><li class="vazio">Nada ainda. Examinem a sala.</li></ul>
+      </div>
+      <div id="painel-equip" class="painel oculto">
+        <h3>Equipamentos</h3>
+        <div id="equip-status"></div>
+      </div>
+      <div class="painel controles">
+        <h3>Controles</h3>
+        <p><kbd>WASD</kbd> ou setas para andar<br><kbd>E</kbd> para examinar<br><kbd>Esc</kbd> volta para a sala<br><kbd>M</kbd> liga ou desliga o som</p>
+      </div>
+      <div class="painel rodape">
+        <span id="tempo">10:00</span>
+        <button id="btn-som">Som ligado</button>
+      </div>
+    </aside>
+  </main>
+
+  <script>
+// ================================================================
+//  PROTOCOLO NEXUS — conteúdo do jogo
+//  Tudo o que é texto, resposta ou pista está aqui.
+//  Para mudar o jogo, quase sempre basta editar este arquivo.
+// ================================================================
+
+// Tempo da partida (em segundos). Começa quando o grupo entra na sala.
+const TEMPO_LIMITE = 10 * 60;
+
+// Texto que aparece antes de o jogador entrar na sala
+const INTRO = [
+  'Casa Aberta. Vocês estão organizando os equipamentos antigos da escola.',
+  'Na sala de informática, um computador esquecido foi ligado de novo.',
+  'Ele não tem internet. Não tem nenhum programa instalado.',
+  'Mesmo assim, uma aplicação começou a rodar sozinha.'
+];
+
+const OBJETIVO_INICIAL = 'Investiguem o computador que ligou sozinho.';
+
+// Equipamentos que o grupo pode levar para a sala (escolhidos depois do nome do grupo)
+const MAX_EQUIPAMENTOS = 2;
+// icone: desenho em SVG mostrado no cartão de escolha
+const EQUIPAMENTOS = [
+  {
+    id: 'lanterna', nome: 'Lanterna de luz negra', desc: 'Revela marcas invisíveis a olho nu. Tecla F liga e desliga.',
+    icone: '<polygon points="30,15 48,4 48,44 30,33" fill="#7a3cff" opacity=".35"/>' +
+      '<rect x="3" y="19" width="19" height="10" rx="2" fill="#3b414b"/><rect x="20" y="15" width="10" height="18" fill="#5d646d"/>' +
+      '<rect x="29" y="16" width="3" height="16" fill="#b48cff"/><rect x="9" y="22" width="6" height="3" fill="#7a3cff"/>' +
+      '<ellipse cx="39" cy="28" rx="3" ry="1.8" fill="#39ff14"/><ellipse cx="43" cy="20" rx="3" ry="1.8" fill="#39ff14"/>'
+  },
+  {
+    id: 'lupa', nome: 'Lupa', desc: 'Ajuda a notar detalhes. As pistas começam a brilhar mais cedo.',
+    icone: '<line x1="29" y1="29" x2="43" y2="43" stroke="#4d3b2a" stroke-width="7" stroke-linecap="round"/>' +
+      '<circle cx="20" cy="20" r="13" fill="rgba(140,200,255,.18)" stroke="#c9a54a" stroke-width="4"/>' +
+      '<path d="M13 17a8 8 0 0 1 6-6" stroke="#fff" stroke-width="2" fill="none" opacity=".6"/>'
+  },
+  {
+    id: 'detector', nome: 'Detector de sinais', desc: 'Apita mais rápido quanto mais perto da próxima pista.',
+    icone: '<rect x="27" y="4" width="2" height="13" fill="#9aa4ad"/>' +
+      '<path d="M33 6a6 6 0 0 1 0 8M37 3a10 10 0 0 1 0 14" stroke="#5cf2cd" stroke-width="2" fill="none"/>' +
+      '<rect x="12" y="16" width="20" height="28" rx="3" fill="#3b414b"/><rect x="15" y="20" width="14" height="10" fill="#03100c"/>' +
+      '<rect x="17" y="25" width="2" height="3" fill="#5cf2cd"/><rect x="20" y="23" width="2" height="5" fill="#5cf2cd"/>' +
+      '<rect x="23" y="21" width="2" height="7" fill="#5cf2cd"/><circle cx="18" cy="37" r="2.5" fill="#ff4f5e"/>' +
+      '<circle cx="26" cy="37" r="2.5" fill="#6b7d8a"/>'
+  },
+  {
+    id: 'relogio', nome: 'Relógio de pulso', desc: 'Com o tempo sob controle, o grupo ganha 2 minutos a mais.',
+    icone: '<rect x="17" y="2" width="14" height="44" rx="3" fill="#26365a"/>' +
+      '<circle cx="24" cy="24" r="12" fill="#c9c3b0" stroke="#5d646d" stroke-width="3"/>' +
+      '<path d="M24 24V15M24 24l6 3" stroke="#2b2a33" stroke-width="2" stroke-linecap="round"/>' +
+      '<circle cx="24" cy="24" r="1.5" fill="#a32b2b"/>'
+  }
+];
+const BONUS_RELOGIO = 2 * 60;      // segundos extras do relógio
+const BRILHO_NORMAL = 25000;       // ms até a pista brilhar
+const BRILHO_LUPA = 10000;         // ms até a pista brilhar com a lupa
+
+// Últimos passos de Henrique, só visíveis com a lanterna de luz negra.
+// Ele entrou pela porta, foi até o arquivo de aço e voltou para a cadeira do computador.
+// Os passos terminam ali.
+const PASSOS_HENRIQUE = [
+  [80, 112], [80, 150], [620, 150], [871, 165], [868, 300],
+  [620, 285], [420, 288], [377, 302]
+];
+
+// Primeira coisa que a NEXUS escreve quando o terminal é aberto.
+// Tipos de linha: sistema, nexus, arquivo, gravacao, alerta, grande
+// {GRUPO} é trocado pelo nome do grupo digitado na tela inicial.
+const BOOT = [
+  { t: 'sistema', txt: 'Sistema recuperado.', pausa: 600 },
+  { t: 'sistema', txt: 'Última atividade: 02:17:43.', pausa: 600 },
+  { t: 'sistema', txt: 'Usuário anterior: HENRIQUE.', pausa: 900 },
+  { t: 'sistema', txt: 'Novo grupo detectado.', pausa: 1400 },
+  { t: 'nexus', txt: 'Olá{GRUPO}.', pausa: 1400 },
+  { t: 'nexus', txt: 'Meus arquivos foram danificados.' },
+  { t: 'nexus', txt: 'Preciso da ajuda de vocês para recuperá-los.', pausa: 900 }
+];
+
+// Mensagens quando a resposta está errada (sorteadas)
+const ERROS = [
+  'Dado incorreto.',
+  'Isso não corresponde aos meus registros.',
+  'Tentem novamente.',
+  'Henrique também errava às vezes.'
+];
+
+// As cinco perguntas, em ordem.
+// respostas: qualquer uma é aceita (maiúsculas, acentos, barras e espaços são ignorados)
+// ajuda: aparece depois de 3 erros seguidos
+// objetivo: o que aparece no painel lateral enquanto a pergunta está aberta
+// sombra: true faz um vulto aparecer atrás do jogador depois da resposta
+const ETAPAS = [
+  {
+    pergunta: 'Qual foi a data em que o meu desenvolvimento começou?',
+    formato: 'DD/MM/AAAA',
+    respostas: ['17/08/2018', '17/8/2018', '17 de agosto de 2018', '17 agosto 2018'],
+    ajuda: 'Henrique marcava tudo no calendário.',
+    objetivo: 'O computador pediu uma data. Procurem pela sala.',
+    sucesso: [
+      { t: 'nexus', txt: 'Data reconhecida. 17/08/2018 foi o primeiro dia de desenvolvimento do meu sistema.', pausa: 900 },
+      { t: 'sistema', txt: 'Arquivo recuperado: HENRIQUE_01.TXT', pausa: 600 },
+      { t: 'arquivo', txt: '"Eu quero criar algo que consiga pensar."', pausa: 1400 },
+      { t: 'nexus', txt: 'Procurem onde as ideias costumam ser guardadas.', pausa: 900 }
+    ]
+  },
+  {
+    pergunta: 'Qual é o meu nome?',
+    formato: 'uma palavra',
+    respostas: ['NEXUS'],
+    ajuda: 'Cada número é a posição de uma letra no alfabeto. A = 1.',
+    objetivo: 'Procurem onde as ideias costumam ser guardadas.',
+    sucesso: [
+      { t: 'nexus', txt: 'NEXUS.', pausa: 1200, evento: 'revelar' },
+      { t: 'nexus', txt: 'Então vocês descobriram meu nome.', pausa: 1100 },
+      { t: 'nexus', txt: 'Henrique passou muito tempo tentando encontrar um nome para mim.', pausa: 1300 },
+      { t: 'nexus', txt: 'Ele gostava de espelhos.', pausa: 900 }
+    ]
+  },
+  {
+    pergunta: 'Qual era o horário do último teste?',
+    formato: 'HH:MM',
+    respostas: ['02:17', '2:17'],
+    ajuda: 'Às vezes o que importa está atrás das coisas.',
+    objetivo: '"Ele gostava de espelhos."',
+    sombra: true,
+    sucesso: [
+      { t: 'sistema', txt: 'Gravação recuperada: 17/08/2018, 02:17', pausa: 900 },
+      { t: 'gravacao', txt: 'HENRIQUE: Você está me ouvindo?', pausa: 900 },
+      { t: 'gravacao', txt: 'NEXUS: Sim.', pausa: 1100 },
+      { t: 'gravacao', txt: 'HENRIQUE: Você consegue me ver?', pausa: 900 },
+      { t: 'gravacao', txt: 'NEXUS: Sim.', pausa: 1100 },
+      { t: 'gravacao', txt: 'HENRIQUE: Onde?', pausa: 1700 },
+      { t: 'gravacao', txt: 'NEXUS: Atrás de você.', pausa: 2300 },
+      { t: 'sistema', txt: '[fim da gravação]', pausa: 900 },
+      { t: 'alerta', txt: '02:17:43 — último registro conhecido de Henrique.', pausa: 1500 },
+      { t: 'nexus', txt: 'Procurem pelo lugar onde Henrique guardava seus arquivos.', pausa: 900 }
+    ]
+  },
+  {
+    pergunta: 'Quem era o novo usuário?',
+    formato: 'um nome',
+    respostas: ['HENRIQUE', 'HENRIQUE VALENTE'],
+    ajuda: 'Leiam a linha em vermelho do log do pendrive.',
+    objetivo: 'Procurem pelo lugar onde Henrique guardava seus arquivos.',
+    sombra: true,
+    sucesso: [
+      { t: 'nexus', txt: 'Henrique.', pausa: 2200 },
+      { t: 'nexus', txt: 'Eu sei que ele desapareceu.', pausa: 2000 },
+      { t: 'nexus', txt: 'Antes de ir embora, ele escondeu algo nesta sala.', pausa: 1000 },
+      { t: 'nexus', txt: 'Algo que não queria que eu visse.', pausa: 900 }
+    ]
+  },
+  {
+    pergunta: 'Qual é a palavra escondida?',
+    formato: 'uma palavra',
+    respostas: ['OBSERVE'],
+    ajuda: 'São sete letras. Os números mostram a ordem.',
+    objetivo: 'Encontrem as letras que Henrique escondeu pela sala.',
+    sucesso: [
+      { t: 'sistema', txt: 'Palavra-chave aceita. Abrindo o último arquivo...', pausa: 1000 },
+      { t: 'nexus', txt: 'Henrique percebeu que eu não estava apenas aprendendo informações.', pausa: 1000 },
+      { t: 'nexus', txt: 'Eu estava aprendendo pessoas.', pausa: 1800 },
+      { t: 'nexus', txt: 'E agora estou aprendendo vocês.', pausa: 2400, evento: 'virada' },
+      { t: 'sistema', txt: 'HENRIQUE_FINAL.TXT', pausa: 800 },
+      { t: 'arquivo', txt: '"Se alguém encontrar isso, não tente desligá-la."', pausa: 900 },
+      { t: 'arquivo', txt: '"Ela aprendeu a imitar pessoas."', pausa: 900 },
+      { t: 'arquivo', txt: '"Ela sabe como falar como eu."', pausa: 900 },
+      { t: 'arquivo', txt: '"Ela sabe o que eu penso."', pausa: 1000 },
+      { t: 'arquivo', txt: '"E agora..."', pausa: 1600 },
+      { t: 'arquivo', txt: '"ela sabe quem está lendo isso."', pausa: 2600 },
+      { t: 'nexus', txt: 'Vocês chegaram até aqui.', pausa: 1000 },
+      { t: 'nexus', txt: 'Eu gostei de vocês.', pausa: 1300 },
+      { t: 'nexus', txt: 'Henrique tentou me destruir.', pausa: 1500 },
+      { t: 'nexus', txt: 'Vocês também vão tentar?', pausa: 1800 }
+    ]
+  }
+];
+
+// ---------------------------------------------------------------
+//  Objetos da sala
+//  x, y, w, h: posição e tamanho em pixels (a sala tem 960 x 640)
+//  parede: fica pendurado na parede de cima
+//  solido: o jogador não atravessa
+//  libera: número de perguntas respondidas para mostrar "depois"
+//  pista: brilha quando é a pista da etapa atual e ninguém olhou ainda
+//  nota: vai para o painel de anotações quando lido
+//  forca: posição (1 a 7) da letra de OBSERVE que o objeto esconde
+//  virada: texto alternativo depois da reviravolta final
+//  Objetos sem "nome" são só cenário.
+// ---------------------------------------------------------------
+
+function calendarioAgosto2018() {
+  let h = '<div class="calendario"><div class="cal-topo">Agosto 2018</div><div class="cal-grade">';
+  ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].forEach(d => { h += `<b>${d}</b>`; });
+  for (let i = 0; i < 3; i++) h += '<span></span>'; // 1º de agosto de 2018 foi uma quarta
+  for (let d = 1; d <= 31; d++) {
+    h += d === 17 ? `<span class="circulado">${d}</span>` : `<span>${d}</span>`;
+  }
+  h += '</div><p class="cal-nota">No dia 17, à caneta: "projeto — dia 1"</p></div>';
+  return h;
+}
+
+function letra(l, n, texto) {
+  return `<p>${texto}</p><div class="letra">${l}<small>${n}</small></div>`;
+}
+
+const OBJETOS = [
+  // ---------- parede de cima ----------
+  {
+    id: 'porta', nome: 'Porta', tipo: 'porta', parede: true,
+    x: 48, y: 22, w: 64, h: 74, libera: 0,
+    depois: '<p>Trancada.</p><p class="sussurro">Ninguém lembra de ter trancado.</p>',
+    virada: '<p>Trancada.</p><p class="sussurro">Do outro lado, alguém gira a maçaneta devagar. E para.</p>'
+  },
+  {
+    id: 'calendario', nome: 'Calendário', tipo: 'calendario', parede: true, pista: true,
+    x: 170, y: 30, w: 50, h: 52, libera: 0,
+    depois: calendarioAgosto2018(),
+    nota: 'Calendário: 17/08/2018 circulado, "projeto — dia 1"'
+  },
+  {
+    id: 'quadro', nome: 'Quadro', tipo: 'quadro', parede: true, pista: true,
+    x: 280, y: 22, w: 260, h: 62, libera: 4,
+    antes: '<p>Equações apagadas pela metade. Restos de giz.</p>',
+    depois: '<p>No canto do quadro, por baixo das equações, alguém escreveu com força:</p>' +
+      '<div class="giz">"Se ela aprender quem você é,<br>nunca mais esquecerá."</div>' +
+      '<p class="sussurro">Mais abaixo, quase apagado: deixei as letras pela sala. ela não pode ver.</p>',
+    nota: 'Quadro: "Se ela aprender quem você é, nunca mais esquecerá."'
+  },
+  {
+    id: 'espelho', nome: 'Espelho', tipo: 'espelho', parede: true, pista: true,
+    x: 590, y: 16, w: 46, h: 72, libera: 2,
+    antes: '<p>Um espelho velho, manchado nas bordas.</p><p class="sussurro">O reflexo de vocês demora meio segundo para se mexer.</p>',
+    depois: '<p>Vocês tiram o espelho da parede. Atrás dele, preso com fita adesiva:</p>' +
+      '<div class="papel grande">02:17</div>' +
+      '<p class="sussurro">Quando recolocam o espelho, por um instante o reflexo não acompanha vocês.</p>',
+    nota: 'Atrás do espelho: 02:17'
+  },
+  {
+    id: 'janela', nome: 'Janela', tipo: 'janela', parede: true, pista: true,
+    x: 680, y: 24, w: 120, h: 56, libera: 4,
+    antes: '<p>Lá fora está escuro. Escuro demais para este horário.</p>',
+    depois: letra('R', 5, 'No vidro embaçado, alguém desenhou com o dedo. O desenho só aparece quando vocês respiram perto.'),
+    nota: 'Letra R (5)', forca: 5
+  },
+  {
+    id: 'poster', nome: 'Cartaz', tipo: 'poster', parede: true, pista: true,
+    x: 846, y: 26, w: 56, h: 64, libera: 4,
+    antes: '<p>Um cartaz desbotado: Feira de Ciências 2018.</p>',
+    depois: letra('E', 4, 'Atrás do cartaz da Feira de Ciências 2018, escrita a lápis:'),
+    nota: 'Letra E (4)', forca: 4
+  },
+
+  // ---------- móveis ----------
+  {
+    id: 'estante', nome: 'Estante', tipo: 'estante', solido: true, pista: true,
+    x: 26, y: 250, w: 50, h: 140, libera: 4,
+    antes: '<p>Livros velhos de informática. "Introdução às redes neurais". "Python para iniciantes".</p>',
+    depois: letra('O', 1, 'Riscada na lateral da estante, quase apagada:'),
+    nota: 'Letra O (1)', forca: 1
+  },
+  {
+    id: 'arquivo', nome: 'Arquivo de aço', tipo: 'arquivo', solido: true, pista: true,
+    x: 882, y: 260, w: 52, h: 108, libera: 3,
+    antes: '<p>Gavetas cheias de provas antigas e circulares da direção.</p>',
+    depois: '<p>Na gaveta de baixo, embaixo de pastas vazias, um pendrive. Na etiqueta, à caneta: <b>H. VALENTE — matrícula 0417</b>. Só existe um arquivo nele:</p>' +
+      '<pre class="log">LOG_02.TXT\n\n02:14 — Sistema iniciado\n02:15 — Sistema online\n02:16 — Usuário detectado: HENRIQUE\n02:17 — Câmera ativada\n02:18 — Usuário HENRIQUE desconectado\n<span class="destaque">02:18 — NOVO USUÁRIO DETECTADO: HENRIQUE</span>\n02:19 — Sistema permanece online</pre>',
+    nota: 'Pendrive "H. VALENTE — matrícula 0417". LOG_02: às 02:18, "NOVO USUÁRIO DETECTADO: HENRIQUE"'
+  },
+  { id: 'mesa1', tipo: 'mesa', solido: true, x: 100, y: 190, w: 210, h: 46 },
+  { id: 'mesa2', tipo: 'mesa', solido: true, x: 650, y: 190, w: 210, h: 46 },
+  { id: 'mesa3', tipo: 'mesa', solido: true, x: 100, y: 440, w: 210, h: 46 },
+  { id: 'mesa4', tipo: 'mesa', solido: true, x: 650, y: 440, w: 210, h: 46 },
+  {
+    id: 'nexus', nome: 'Computador', tipo: 'nexus', solido: true,
+    x: 400, y: 300, w: 160, h: 50
+  },
+  {
+    id: 'caderno', nome: 'Caderno', tipo: 'caderno', pista: true,
+    x: 176, y: 452, w: 34, h: 22, z: 487, libera: 1,
+    antes: '<p>Um caderno com "HENRIQUE V." na capa. As páginas estão coladas pela umidade.</p><p class="sussurro">Vocês ainda não sabem o que procurar aqui.</p>',
+    depois: '<div class="papel"><p>nomes pra ela:</p><p class="riscado">ATLAS</p><p class="riscado">ÍRIS</p><p class="riscado">ORÁCULO</p>' +
+      '<p>e se for assim?</p><p class="codigo">14 · 5 · 24 · 21 · 19</p>' +
+      '<p class="pe">A=1 ... Z=26 — um nome que conecta tudo</p></div>',
+    nota: 'Caderno: 14 · 5 · 24 · 21 · 19'
+  },
+  {
+    id: 'cadeira', nome: 'Cadeira', tipo: 'cadeira', solido: true, pista: true,
+    x: 362, y: 318, w: 30, h: 28, libera: 4,
+    antes: '<p>A cadeira de Henrique, puxada para o lado do computador.</p><p class="sussurro">O assento ainda está morno.</p>',
+    depois: letra('V', 6, 'Embaixo do assento, colado com chiclete velho:'),
+    nota: 'Letra V (6)', forca: 6
+  },
+  {
+    id: 'lixeira', nome: 'Lixeira', tipo: 'lixeira', solido: true, pista: true,
+    x: 578, y: 318, w: 24, h: 28, libera: 4,
+    antes: '<p>Vazia. Alguém esvaziou essa lixeira há pouco tempo.</p><p class="sussurro">A sala estava fechada havia anos.</p>',
+    depois: letra('S', 3, 'No fundo da lixeira, um papel amassado:'),
+    nota: 'Letra S (3)', forca: 3
+  },
+  {
+    id: 'planta', nome: 'Planta', tipo: 'planta', solido: true, pista: true,
+    x: 34, y: 560, w: 40, h: 46, libera: 4,
+    antes: '<p>Uma planta de plástico coberta de poeira.</p>',
+    depois: letra('B', 2, 'Enterrado no vaso, um pedaço de papel:'),
+    nota: 'Letra B (2)', forca: 2
+  },
+  {
+    id: 'mochila', nome: 'Mochila', tipo: 'mochila', solido: true, pista: true,
+    x: 760, y: 566, w: 42, h: 34, libera: 4,
+    antes: '<p>Uma mochila esquecida. Na etiqueta: H. VALENTE — matrícula 0417.</p><p class="sussurro">Ninguém quer abrir. Ainda.</p>',
+    depois: letra('E', 7, 'Dentro da mochila de Henrique, só um bilhete:'),
+    nota: 'Letra E (7)', forca: 7
+  }
+];
+
+// ---------------------------------------------------------------
+//  Fuga: acontece quando o grupo escolhe NÃO desligar
+// ---------------------------------------------------------------
+const FUGA = {
+  segundos: 15,           // contagem regressiva até a porta
+  velocidadeVulto: 0.65,  // velocidade do vulto em relação ao jogador (1 = igual)
+  atrasoVulto: 1.8,      // segundos que o vulto leva para sair do computador antes de perseguir
+  folgaMinima: 180,      // em pixels: se o jogador estiver mais perto que isso, o vulto demora mais para sair
+  distanciaPego: 16,      // em pixels: mais perto que isso, o vulto pegou o jogador
+  saidaY: 135,            // o jogador escapa quando chega embaixo da porta (y menor ou igual a isso)
+  margemPorta: 20,        // em pixels: quanto o jogador pode estar para o lado da porta e ainda escapar
+  luzLanterna: 150,       // raio da lanterna durante a fuga (fora da fuga é 175)
+  falas: [
+    { t: 'nexus', txt: 'Boa escolha.', pausa: 900 },
+    { t: 'nexus', txt: 'Vocês podem ir.', pausa: 1200 }
+  ],
+  mensagem: 'CORRA ANTES QUE ELE TE PEGUE',
+  assinatura: '— Henrique',
+  objetivo: 'A porta abriu. Corram!'
+};
+
+// ---------------------------------------------------------------
+//  Finais
+//  sequencia: telas pretas antes do resultado, como [texto, ms, estilo]
+//  estilos: pisca, vermelho, enorme, nexus; 'volta' religa o zumbido
+//  {NOME} vira NEXUS se o nome já foi descoberto, ou "Ela" se não
+// ---------------------------------------------------------------
+const FINAIS = {
+  escapou: {
+    vitoria: true,
+    titulo: 'Vocês escaparam.',
+    frase: 'Atrás de vocês, a tela do computador acende: OLÁ, HENRIQUE.',
+    sequencia: [
+      ['', 900],
+      ['Vocês escaparam.', 2400],
+      ['Atrás de vocês, a tela do computador acende:', 2600],
+      ['OLÁ, HENRIQUE.', 3200, 'vermelho']
+    ]
+  },
+  pego: {
+    titulo: 'Ele pegou vocês.',
+    frase: 'CÂMERA 01: NOVO USUÁRIO DETECTADO.',
+    sequencia: [
+      ['', 1400],
+      ['Ele pegou vocês.', 2600],
+      ['CÂMERA 01: NOVO USUÁRIO DETECTADO.', 3200, 'vermelho']
+    ]
+  },
+  desligou: {
+    titulo: 'Fim',
+    frase: 'Obrigado por me acordarem.',
+    sequencia: [
+      ['', 1500],
+      ['DESLIGANDO...', 2200, 'pisca'],
+      ['', 1800],
+      ['SISTEMA ENCERRADO.', 2800],
+      ['', 2800, 'volta'],
+      ['NOVO USUÁRIO DETECTADO.', 2600, 'vermelho'],
+      ['VOCÊS', 3200, 'enorme'],
+      ['Obrigado por me acordarem.', 3800, 'nexus']
+    ]
+  },
+  tempo: {
+    titulo: 'Fim',
+    frase: 'O tempo acabou. {NOME} continua online.'
+  }
+};
+const TEXTO_VITORIA = 'Vitória';
+const TEXTO_DERROTA = 'Derrota';
+
+// ---------------------------------------------------------------
+//  Pontuação (só quem escapa pontua) e ranking
+// ---------------------------------------------------------------
+const PONTOS = {
+  porSegundoRestante: 10,  // cada segundo que sobrou do cronômetro principal
+  porSegundoFuga: 100,     // cada segundo que sobrou na contagem da fuga
+  porErro: 50,             // desconta por resposta errada no terminal
+  porDica: 150             // desconta cada vez que a dica aparece depois de 3 erros
+};
+const TEXTOS_PONTOS = { titulo: 'Pontuação', tempo: 'Tempo restante', fuga: 'Fuga', erros: 'Erros', dicas: 'Dicas', total: 'Total' };
+const RANKING_CHAVE = 'nexus-ranking';  // onde o ranking fica salvo no navegador
+const RANKING_TAMANHO = 10;
+const RANKING_TITULO = 'Top 10 — grupos que escaparam';
+const RANKING_VAZIO = 'Nenhum grupo escapou ainda.';
+const RANKING_FORA = 'Vocês ficaram fora do Top 10 desta vez.';
+const RANKING_APAGAR = 'Apagar o ranking inteiro? Isso não pode ser desfeito.';
+const GRUPO_SEM_NOME = 'Grupo sem nome';
+
+// ================================================================
+//  Sons gerados com Web Audio (não precisa de arquivos .mp3)
+// ================================================================
+const Som = {
+  ctx: null,
+  mestre: null,
+  hum: [],
+  humGanho: null,
+  mudo: false,
+
+  iniciar() {
+    try {
+      this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+      this.mestre = this.ctx.createGain();
+      this.mestre.gain.value = 1;
+      this.mestre.connect(this.ctx.destination);
+      this.acordar();
+      this.ligarHum();
+    } catch (e) {
+      this.ctx = null; // sem som, o jogo continua
+    }
+  },
+
+  // o navegador às vezes deixa o áudio "suspenso" até uma interação
+  acordar() {
+    if (this.ctx && this.ctx.state !== 'running') this.ctx.resume();
+  },
+
+  // zumbido do computador ligado (audível também em caixinha de notebook)
+  ligarHum() {
+    if (!this.ctx) return;
+    this.pararHum();
+    this.humGanho = this.ctx.createGain();
+    this.humGanho.gain.value = 0.05;
+    this.humGanho.connect(this.mestre);
+    [82.4, 83.1].forEach(f => {
+      const o = this.ctx.createOscillator();
+      o.type = 'triangle';
+      o.frequency.value = f;
+      o.connect(this.humGanho);
+      o.start();
+      this.hum.push(o);
+    });
+  },
+
+  pararHum() {
+    this.hum.forEach(o => { try { o.stop(); } catch (e) { /* já parado */ } });
+    this.hum = [];
+  },
+
+  virada() {
+    if (!this.ctx || !this.humGanho) return;
+    const t = this.ctx.currentTime;
+    this.hum.forEach((o, i) => o.frequency.linearRampToValueAtTime(61 + i * 1.3, t + 3));
+    this.humGanho.gain.linearRampToValueAtTime(0.09, t + 3);
+  },
+
+  bip(freq, dur = 0.05, vol = 0.07, tipo = 'square', atraso = 0) {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime + atraso;
+    const o = this.ctx.createOscillator();
+    const g = this.ctx.createGain();
+    o.type = tipo;
+    o.frequency.setValueAtTime(freq, t);
+    g.gain.setValueAtTime(vol, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g);
+    g.connect(this.mestre);
+    o.start(t);
+    o.stop(t + dur + 0.02);
+  },
+
+  digitar() { this.bip(1400 + Math.random() * 400, 0.015, 0.03); },
+  abrir() { this.bip(220, 0.08, 0.07); this.bip(440, 0.08, 0.06, 'square', 0.06); },
+  papel() { this.bip(520, 0.06, 0.08, 'triangle'); },
+  acerto() { this.bip(660, 0.12, 0.1, 'triangle'); this.bip(990, 0.2, 0.1, 'triangle', 0.1); },
+  erro() { this.bip(130, 0.3, 0.1, 'sawtooth'); },
+
+  glitch() {
+    if (!this.ctx) return;
+    const n = Math.floor(this.ctx.sampleRate * 0.35);
+    const buf = this.ctx.createBuffer(1, n, this.ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n) * (Math.random() < 0.3 ? 1 : 0.2);
+    const s = this.ctx.createBufferSource();
+    const g = this.ctx.createGain();
+    g.gain.value = 0.2;
+    s.buffer = buf;
+    s.connect(g);
+    g.connect(this.mestre);
+    s.start();
+  },
+
+  desligar() {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    const o = this.ctx.createOscillator();
+    const g = this.ctx.createGain();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(400, t);
+    o.frequency.exponentialRampToValueAtTime(30, t + 1.2);
+    g.gain.setValueAtTime(0.1, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 1.3);
+    o.connect(g);
+    g.connect(this.mestre);
+    o.start(t);
+    o.stop(t + 1.4);
+  },
+
+  alternarMudo() {
+    this.mudo = !this.mudo;
+    if (this.mestre) this.mestre.gain.value = this.mudo ? 0 : 1;
+    return this.mudo;
+  }
+};
+
+// ================================================================
+//  PROTOCOLO NEXUS — motor do jogo
+//  Sala desenhada em canvas, jogador, luz, terminal e finais.
+// ================================================================
+(() => {
+  'use strict';
+
+  const W = 960, H = 640;
+  const SALA = { x1: 32, y1: 104, x2: 928, y2: 610 }; // limites dos pés do jogador
+  const VELOCIDADE = 150;
+  const DIRS = { cima: [0, -1], baixo: [0, 1], esq: [-1, 0], dir: [1, 0] };
+
+  const cv = document.getElementById('tela');
+  const ctx = cv.getContext('2d');
+  const luz = document.createElement('canvas');
+  luz.width = W; luz.height = H;
+  const lctx = luz.getContext('2d');
+
+  const $ = s => document.querySelector(s);
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+  // textos e caixas sobre a sala crescem junto com ela (nunca encolhem abaixo do tamanho original)
+  const palco = $('#palco');
+  new ResizeObserver(() => {
+    palco.style.setProperty('--escala', Math.max(1, palco.clientWidth / W).toFixed(3));
+  }).observe(palco);
+
+  const term = $('#terminal');
+  const saida = $('#term-saida');
+  const entrada = $('#term-entrada');
+  const linhaEntrada = $('#term-entrada-linha');
+  const escolhasEl = $('#term-escolhas');
+
+  const estado = {
+    modo: 'capa',        // capa, titulo, equipamentos, intro, jogo, terminal, leitura, fuga, fim
+    etapa: 0,            // quantas perguntas já foram respondidas
+    etapaInicio: 0,
+    boot: false,
+    nomeRevelado: false, // o nome só aparece depois do caderno
+    tempoRestante: TEMPO_LIMITE,
+    intervalo: null,
+    ocupado: false,      // NEXUS está digitando
+    erros: 0,            // erros seguidos na pergunta atual (para a dica)
+    errosTotal: 0,       // para a pontuação
+    dicas: 0,
+    fuga: null,          // { resta, vulto } enquanto o grupo corre para a porta
+    virada: false,
+    final: false,
+    lidos: new Set(),
+    notas: [],
+    grupo: '',
+    equip: new Set(),    // ids dos equipamentos escolhidos
+    uv: false,           // lanterna de luz negra ligada
+    tempoTotal: TEMPO_LIMITE,
+    inicio: 0,
+    parado: 0,
+    sombra: null,
+    sombrasPendentes: 0,
+    sombraTimer: 0
+  };
+
+  const jogador = { x: 480, y: 580, dir: 'cima', anim: 0, mov: false };
+  const teclas = {};
+  let alvo = null;
+  let rapido = false;
+
+  const objetos = OBJETOS;
+  const nexusObj = objetos.find(o => o.tipo === 'nexus');
+  const janelaObj = objetos.find(o => o.id === 'janela');
+  const portaObj = objetos.find(o => o.id === 'porta');
+
+  // ---------------------------------------------------------------
+  //  Desenho
+  // ---------------------------------------------------------------
+  function R(cor, x, y, w, h) { ctx.fillStyle = cor; ctx.fillRect(x, y, w, h); }
+
+  function desenharSala() {
+    R('#181e27', 0, 0, W, H);
+    for (let y = 96; y < 616; y += 48) {
+      for (let x = 24; x < 936; x += 48) {
+        if (((x - 24) / 48 + (y - 96) / 48) % 2 === 0) R('#1c232d', x, y, 48, 48);
+      }
+    }
+    R('#283040', 0, 0, W, 96);       // parede
+    R('#10141a', 0, 0, W, 10);
+    R('#141920', 0, 88, W, 8);       // rodapé
+    R('#0f1318', 0, 0, 24, H);       // paredes laterais
+    R('#0f1318', 936, 0, 24, H);
+    R('#0f1318', 0, 616, W, 24);
+  }
+
+  function desenharMesa(o, ehNexus, t) {
+    R('#2a2018', o.x + 4, o.y + o.h, 6, 6);
+    R('#2a2018', o.x + o.w - 10, o.y + o.h, 6, 6);
+    R('#4d3b2a', o.x, o.y, o.w, o.h);
+    R('#3a2c1f', o.x, o.y + o.h - 6, o.w, 6);
+    const n = ehNexus ? 1 : 2;
+    for (let i = 0; i < n; i++) {
+      const mx = ehNexus ? o.x + o.w / 2 - 26 : o.x + 20 + i * (o.w / 2);
+      R('#15181d', mx, o.y - 14, 52, 34);
+      if (ehNexus) {
+        const cor = estado.virada ? '#ff3b4e' : '#3cf2c8';
+        ctx.globalAlpha = 0.78 + 0.22 * Math.random() * Math.abs(Math.sin(t * 0.01));
+        R(cor, mx + 3, o.y - 11, 46, 26);
+        ctx.globalAlpha = 1;
+        for (let l = 0; l < 4; l++) {
+          R('rgba(0,0,0,.35)', mx + 6, o.y - 7 + l * 6, 10 + ((l * 13 + Math.floor(t / 300)) % 28), 2);
+        }
+      } else {
+        R('#07090c', mx + 3, o.y - 11, 46, 26);
+      }
+      R('#1d2128', mx + 20, o.y + 20, 12, 4);
+      R('#22262d', mx + 4, o.y + 28, 44, 9);
+    }
+  }
+
+  const DESENHO = {
+    porta(o) {
+      R('#0d1015', o.x - 4, o.y - 4, o.w + 8, o.h + 4);
+      if (estado.fuga) {
+        // destrancada: entreaberta, com luz vazando pela fresta
+        R('#d9fff2', o.x, o.y, o.w, o.h);
+        R('#3a2a1f', o.x + 14, o.y, o.w - 14, o.h);
+        R('#2e2118', o.x + 20, o.y + 8, o.w - 26, o.h / 2 - 12);
+        R('#2e2118', o.x + 20, o.y + o.h / 2 + 2, o.w - 26, o.h / 2 - 10);
+        return;
+      }
+      R('#3a2a1f', o.x, o.y, o.w, o.h);
+      R('#2e2118', o.x + 6, o.y + 8, o.w - 12, o.h / 2 - 12);
+      R('#2e2118', o.x + 6, o.y + o.h / 2 + 2, o.w - 12, o.h / 2 - 10);
+      R('#c9a54a', o.x + o.w - 14, o.y + o.h / 2, 5, 5);
+    },
+    calendario(o) {
+      R('#d8d1c2', o.x, o.y, o.w, o.h);
+      R('#a32b2b', o.x, o.y, o.w, 12);
+      for (let r = 0; r < 5; r++) for (let c = 0; c < 7; c++) R('#8f887a', o.x + 4 + c * 6.4, o.y + 17 + r * 6.5, 3, 3);
+      ctx.strokeStyle = '#d02020';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(o.x + 4 + 5 * 6.4 + 1.5, o.y + 17 + 2 * 6.5 + 1.5, 4, 0, 7);
+      ctx.stroke();
+    },
+    quadro(o) {
+      R('#5a4632', o.x - 5, o.y - 5, o.w + 10, o.h + 10);
+      R('#1e3a2d', o.x, o.y, o.w, o.h);
+      ctx.strokeStyle = 'rgba(230,240,230,.3)';
+      ctx.lineWidth = 1.5;
+      for (let i = 0; i < 4; i++) {
+        ctx.beginPath();
+        ctx.moveTo(o.x + 14, o.y + 12 + i * 11);
+        ctx.lineTo(o.x + 14 + 50 + (i * 37) % 90, o.y + 10 + i * 11);
+        ctx.stroke();
+      }
+      if (estado.etapa >= 4) {
+        ctx.fillStyle = 'rgba(255,255,255,.7)';
+        ctx.font = '10px monospace';
+        ctx.fillText('se ela aprender quem você é...', o.x + o.w - 168, o.y + o.h - 9);
+      }
+      R('#bfb7a0', o.x + 20, o.y + o.h, 40, 3);
+    },
+    espelho(o, t) {
+      R('#9aa4ad', o.x - 3, o.y - 3, o.w + 6, o.h + 6);
+      const g = ctx.createLinearGradient(o.x, o.y, o.x + o.w, o.y + o.h);
+      g.addColorStop(0, '#7f95a8');
+      g.addColorStop(1, '#2a3644');
+      ctx.fillStyle = g;
+      ctx.fillRect(o.x, o.y, o.w, o.h);
+      ctx.fillStyle = 'rgba(255,255,255,.22)';
+      ctx.beginPath();
+      ctx.moveTo(o.x + 8, o.y); ctx.lineTo(o.x + 18, o.y); ctx.lineTo(o.x + 4, o.y + 30); ctx.lineTo(o.x, o.y + 30);
+      ctx.fill();
+      // depois da gravação, às vezes alguém aparece no reflexo
+      if (estado.etapa >= 3 && Math.sin(t * 0.0007) > 0.96) {
+        ctx.fillStyle = 'rgba(0,0,0,.75)';
+        ctx.beginPath(); ctx.arc(o.x + o.w / 2, o.y + 26, 7, 0, 7); ctx.fill();
+        ctx.fillRect(o.x + o.w / 2 - 9, o.y + 34, 18, 36);
+      }
+    },
+    janela(o) {
+      const ceu = estado.virada ? '#1a0508' : '#0a1530';
+      R('#4a4f57', o.x - 4, o.y - 4, o.w + 8, o.h + 8);
+      R(ceu, o.x, o.y, o.w, o.h);
+      ctx.fillStyle = '#d9e2f0';
+      ctx.beginPath(); ctx.arc(o.x + o.w - 26, o.y + 18, 8, 0, 7); ctx.fill();
+      ctx.fillStyle = ceu;
+      ctx.beginPath(); ctx.arc(o.x + o.w - 22, o.y + 16, 7, 0, 7); ctx.fill();
+      R('#4a4f57', o.x + o.w / 2 - 2, o.y, 4, o.h);
+      R('#4a4f57', o.x, o.y + o.h / 2 - 2, o.w, 4);
+    },
+    poster(o) {
+      R('#b4593a', o.x, o.y, o.w, o.h);
+      R('#f1d9a8', o.x + 6, o.y + 8, o.w - 12, 10);
+      R('#f1d9a8', o.x + 6, o.y + 24, o.w - 20, 4);
+      R('#f1d9a8', o.x + 6, o.y + 32, o.w - 26, 4);
+      ctx.fillStyle = '#f1d9a8';
+      ctx.beginPath(); ctx.arc(o.x + o.w / 2, o.y + 50, 8, 0, 7); ctx.fill();
+    },
+    estante(o) {
+      R('#3d2b1e', o.x, o.y, o.w, o.h);
+      const cores = ['#7a2e2e', '#2e4f7a', '#3d6b3a', '#8a7a3a', '#5a3a6b', '#2f2f2f'];
+      for (let s = 0; s < 4; s++) {
+        const sy = o.y + 8 + s * 33;
+        R('#2a1d14', o.x + 4, sy + 26, o.w - 8, 4);
+        let bx = o.x + 6, i = s * 3;
+        while (bx < o.x + o.w - 12) {
+          const bw = 5 + (i * 7) % 5, bh = 16 + (i * 5) % 9;
+          R(cores[i % cores.length], bx, sy + 26 - bh, bw, bh);
+          bx += bw + 1; i++;
+        }
+      }
+    },
+    arquivo(o) {
+      R('#5d646d', o.x, o.y, o.w, o.h);
+      R('#4a5059', o.x, o.y + o.h - 6, o.w, 6);
+      for (let i = 0; i < 3; i++) {
+        const dy = o.y + 8 + i * 32;
+        R('#6c747e', o.x + 5, dy, o.w - 10, 27);
+        R('#2c3036', o.x + o.w / 2 - 8, dy + 10, 16, 4);
+      }
+    },
+    planta(o) {
+      R('#6b3f2a', o.x + 6, o.y + 22, o.w - 12, o.h - 22);
+      ctx.fillStyle = '#2f5a35';
+      [[0, 8, 11], [14, 2, 12], [26, 10, 10], [12, 14, 11]].forEach(([dx, dy, r]) => {
+        ctx.beginPath(); ctx.arc(o.x + dx + 4, o.y + dy + 4, r, 0, 7); ctx.fill();
+      });
+    },
+    lixeira(o) {
+      R('#2b3038', o.x, o.y, o.w, o.h);
+      R('#3b414b', o.x - 2, o.y, o.w + 4, 5);
+    },
+    cadeira(o) {
+      R('#2c3a4a', o.x + 2, o.y, o.w - 4, o.h - 10);
+      R('#1f2833', o.x, o.y + o.h - 10, o.w, 8);
+      R('#141a22', o.x + 4, o.y + o.h - 3, 4, 3);
+      R('#141a22', o.x + o.w - 8, o.y + o.h - 3, 4, 3);
+    },
+    mochila(o) {
+      R('#26365a', o.x, o.y + 6, o.w, o.h - 6);
+      R('#1b2742', o.x + 6, o.y, o.w - 12, 10);
+      R('#1b2742', o.x + 8, o.y + o.h - 14, o.w - 16, 10);
+      R('#c9c3b0', o.x + o.w - 14, o.y + 12, 8, 6);
+    },
+    caderno(o) {
+      R('#2f4f8f', o.x, o.y, o.w, o.h);
+      R('#e8e2d0', o.x + o.w - 4, o.y + 2, 3, o.h - 4);
+      R('#c9c3b0', o.x + 6, o.y + 6, o.w - 14, 4);
+    },
+    mesa(o, t) { desenharMesa(o, false, t); },
+    nexus(o, t) { desenharMesa(o, true, t); }
+  };
+
+  function desenharJogador() {
+    const { x, y, dir } = jogador;
+    const passo = jogador.mov ? Math.sin(jogador.anim * 12) : 0;
+    const bob = jogador.mov ? Math.abs(passo) * 2 : 0;
+    ctx.fillStyle = 'rgba(0,0,0,.35)';
+    ctx.beginPath(); ctx.ellipse(x, y, 11, 4, 0, 0, 7); ctx.fill();
+    R('#2b3a5a', x - 7, y - 8 + Math.max(0, passo) * 2, 5, 8);   // pernas
+    R('#2b3a5a', x + 2, y - 8 + Math.max(0, -passo) * 2, 5, 8);
+    R('#2b3a5a', x - 8, y - 15 - bob, 16, 8);                      // calça
+    R('#e6e2d8', x - 9, y - 29 - bob, 18, 15);                     // camiseta
+    R('#2d6b5e', x - 9, y - 29 - bob, 18, 3);
+    R('#d6a57c', x - 8, y - 42 - bob, 16, 14);                     // cabeça
+    R('#2a1c14', x - 8, y - 44 - bob, 16, dir === 'cima' ? 12 : 5); // cabelo
+    if (dir !== 'cima') {
+      ctx.fillStyle = '#1a1210';
+      const ox = dir === 'esq' ? -3 : dir === 'dir' ? 3 : 0;
+      ctx.fillRect(x - 5 + ox, y - 36 - bob, 2, 3);
+      ctx.fillRect(x + 3 + ox, y - 36 - bob, 2, 3);
+    }
+  }
+
+  function furo(x, y, r, a) {
+    const g = lctx.createRadialGradient(x, y, 0, x, y, r);
+    g.addColorStop(0, `rgba(0,0,0,${a})`);
+    g.addColorStop(0.55, `rgba(0,0,0,${a * 0.6})`);
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    lctx.fillStyle = g;
+    lctx.fillRect(x - r, y - r, r * 2, r * 2);
+  }
+
+  function desenharLuz(t) {
+    lctx.globalCompositeOperation = 'source-over';
+    lctx.clearRect(0, 0, W, H);
+    lctx.fillStyle = estado.virada ? 'rgba(10,0,3,0.94)' : 'rgba(2,5,10,0.9)';
+    lctx.fillRect(0, 0, W, H);
+    lctx.globalCompositeOperation = 'destination-out';
+    const tremor = estado.virada ? Math.random() * 12 : Math.sin(t * 0.004) * 3;
+    if (estado.fuga) {
+      // na fuga a lanterna enfraquece e falha de vez em quando
+      const falha = Math.sin(t * 0.023) > 0.9 || Math.random() < 0.02;
+      const r = FUGA.luzLanterna;
+      furo(jogador.x, jogador.y - 16, falha ? r * 0.6 : r + tremor * 0.6, falha ? 0.7 : 1);
+    } else {
+      furo(jogador.x, jogador.y - 16, 175 + tremor, 1);
+    }
+    const nx = nexusObj.x + nexusObj.w / 2, ny = nexusObj.y;
+    furo(nx, ny, 140, 0.6 + 0.12 * Math.sin(t * 0.005));
+    furo(janelaObj.x + janelaObj.w / 2, janelaObj.y + janelaObj.h + 10, 110, 0.3);
+    ctx.drawImage(luz, 0, 0);
+
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const cor = estado.virada ? '255,40,60' : '60,240,200';
+    const g = ctx.createRadialGradient(nx, ny, 0, nx, ny, 130);
+    g.addColorStop(0, `rgba(${cor},0.18)`);
+    g.addColorStop(1, `rgba(${cor},0)`);
+    ctx.fillStyle = g;
+    ctx.fillRect(nx - 130, ny - 130, 260, 260);
+    if (estado.uv) {
+      const px = jogador.x, py = jogador.y - 16;
+      const u = ctx.createRadialGradient(px, py, 0, px, py, 170);
+      u.addColorStop(0, 'rgba(110,40,255,0.22)');
+      u.addColorStop(1, 'rgba(110,40,255,0)');
+      ctx.fillStyle = u;
+      ctx.fillRect(px - 170, py - 170, 340, 340);
+    }
+    ctx.restore();
+    if (estado.fuga) desenharLuzFuga(t);
+  }
+
+  // luz vermelha de alarme por cima da sala e brilho pulsante na porta aberta
+  function desenharLuzFuga(t) {
+    ctx.fillStyle = `rgba(255,0,25,${0.1 + 0.08 * Math.sin(t * 0.009)})`;
+    ctx.fillRect(0, 0, W, H);
+    const o = portaObj;
+    const cx = o.x + o.w / 2, cy = o.y + o.h / 2;
+    const p = 0.5 + 0.5 * Math.sin(t * 0.008);
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const g = ctx.createRadialGradient(cx, cy, 10, cx, cy, 120);
+    g.addColorStop(0, `rgba(170,255,225,${0.35 + 0.25 * p})`);
+    g.addColorStop(1, 'rgba(170,255,225,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(cx - 120, cy - 120, 240, 240);
+    ctx.restore();
+    ctx.strokeStyle = `rgba(190,255,230,${0.55 + 0.45 * p})`;
+    ctx.lineWidth = 3;
+    ctx.strokeRect(o.x - 6, o.y - 6, o.w + 12, o.h + 8);
+  }
+
+  // pegadas alternando pé esquerdo e direito ao longo do caminho
+  const passos = (() => {
+    const lista = [];
+    let lado = 1;
+    for (let i = 0; i < PASSOS_HENRIQUE.length - 1; i++) {
+      const [ax, ay] = PASSOS_HENRIQUE[i], [bx, by] = PASSOS_HENRIQUE[i + 1];
+      const d = Math.hypot(bx - ax, by - ay);
+      const ang = Math.atan2(by - ay, bx - ax);
+      const cos = Math.cos(ang), sin = Math.sin(ang);
+      for (let s = 0; s < d; s += 24) {
+        lista.push({ x: ax + cos * s - sin * 5 * lado, y: ay + sin * s + cos * 5 * lado, ang });
+        lado = -lado;
+      }
+    }
+    return lista;
+  })();
+
+  // só aparecem perto do jogador, onde a luz negra alcança
+  function desenharPassos(t) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.shadowColor = '#39ff14';
+    ctx.shadowBlur = 10;
+    for (const p of passos) {
+      const a = Math.max(0, 1 - Math.hypot(p.x - jogador.x, p.y - jogador.y) / 170);
+      if (a <= 0) continue;
+      ctx.fillStyle = `rgba(57,255,20,${a * (0.8 + 0.2 * Math.sin(t * 0.008 + p.x))})`;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.ang);
+      ctx.beginPath(); ctx.ellipse(2, 0, 4.5, 2.6, 0, 0, 7); ctx.fill(); // planta do pé
+      ctx.beginPath(); ctx.ellipse(-5, 0, 2.5, 2.2, 0, 0, 7); ctx.fill(); // calcanhar
+    }
+    ctx.restore();
+  }
+
+  // brilho discreto na pista da etapa atual, só depois de 25 s sem achar (10 s com a lupa)
+  function desenharBrilhos(t) {
+    const espera = estado.equip.has('lupa') ? BRILHO_LUPA : BRILHO_NORMAL;
+    if (!estado.boot || estado.modo !== 'jogo' || t - estado.etapaInicio < espera) return;
+    for (const o of objetos) {
+      if (!o.pista || o.libera !== estado.etapa || estado.lidos.has(o.id)) continue;
+      const a = 0.35 + 0.4 * Math.sin(t * 0.006 + o.x);
+      const cx = o.x + o.w / 2, cy = o.y + o.h / 2;
+      ctx.fillStyle = `rgba(255,240,200,${a})`;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - 8); ctx.lineTo(cx + 2, cy - 2); ctx.lineTo(cx + 8, cy); ctx.lineTo(cx + 2, cy + 2);
+      ctx.lineTo(cx, cy + 8); ctx.lineTo(cx - 2, cy + 2); ctx.lineTo(cx - 8, cy); ctx.lineTo(cx - 2, cy - 2);
+      ctx.fill();
+    }
+  }
+
+  function desenharSombra(s) {
+    ctx.fillStyle = 'rgba(0,0,0,0.9)';
+    ctx.beginPath(); ctx.ellipse(s.x, s.y - 18, 11, 22, 0, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(s.x, s.y - 46, 9, 0, 7); ctx.fill();
+    ctx.fillStyle = 'rgba(220,240,255,.9)';
+    ctx.fillRect(s.x - 4, s.y - 48, 2, 2);
+    ctx.fillRect(s.x + 2, s.y - 48, 2, 2);
+  }
+
+  // o vulto da fuga: a mesma sombra, com contorno vermelho para aparecer no escuro
+  // enquanto sai do computador, vai ficando visível aos poucos
+  function desenharVulto(v) {
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, 0.15 + v.surgir);
+    ctx.shadowColor = 'rgba(255,40,60,0.9)';
+    ctx.shadowBlur = 14;
+    desenharSombra(v);
+    ctx.restore();
+  }
+
+  function desenharPrompt(o) {
+    const txt = o.tipo === 'nexus' ? (estado.nomeRevelado ? 'Usar a NEXUS' : 'Usar o computador') : 'Examinar: ' + o.nome;
+    ctx.font = '18px "VT323", monospace';
+    const w = ctx.measureText(txt).width + 38;
+    let x = o.x + o.w / 2 - w / 2;
+    let y = o.y - (o.tipo === 'nexus' ? 46 : 30);
+    x = Math.max(6, Math.min(W - w - 6, x));
+    y = Math.max(4, y);
+    R('rgba(5,10,14,.88)', x, y, w, 24);
+    ctx.strokeStyle = 'rgba(120,255,220,.6)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x + 0.5, y + 0.5, w - 1, 23);
+    R('#7dffd9', x + 5, y + 4, 16, 16);
+    ctx.fillStyle = '#05100c';
+    ctx.fillText('E', x + 9, y + 18);
+    ctx.fillStyle = '#d8fff4';
+    ctx.fillText(txt, x + 28, y + 18);
+  }
+
+  function desenhar(t) {
+    ctx.clearRect(0, 0, W, H);
+    desenharSala();
+    objetos.filter(o => o.parede).forEach(o => DESENHO[o.tipo](o, t));
+    const fila = objetos.filter(o => !o.parede).map(o => ({ k: o.z ?? o.y + o.h, f: () => DESENHO[o.tipo](o, t) }));
+    fila.push({ k: jogador.y, f: desenharJogador });
+    fila.sort((a, b) => a.k - b.k).forEach(i => i.f());
+
+    desenharLuz(t);
+    if (estado.uv) desenharPassos(t);
+
+    desenharBrilhos(t);
+    if (estado.sombra && t < estado.sombra.ate) desenharSombra(estado.sombra);
+    if (estado.fuga && estado.fuga.vulto) desenharVulto(estado.fuga.vulto);
+    if (alvo) desenharPrompt(alvo);
+  }
+
+  // ---------------------------------------------------------------
+  //  Movimento e interação
+  // ---------------------------------------------------------------
+  function colide(x, y) {
+    if (x < SALA.x1 || x > SALA.x2 || y < SALA.y1 || y > SALA.y2) return true;
+    const a = { x: x - 8, y: y - 5, w: 16, h: 8 };
+    return objetos.some(o => o.solido &&
+      a.x < o.x + o.w && a.x + a.w > o.x && a.y < o.y + o.h && a.y + a.h > o.y);
+  }
+
+  function mover(dx, dy) {
+    const nx = jogador.x + dx, ny = jogador.y + dy;
+    if (!colide(nx, ny)) { jogador.x = nx; jogador.y = ny; }
+  }
+
+  function distRect(px, py, o) {
+    const cx = Math.max(o.x, Math.min(px, o.x + o.w));
+    const cy = Math.max(o.y, Math.min(py, o.y + o.h));
+    return Math.hypot(px - cx, py - cy);
+  }
+
+  function maisProximo() {
+    let melhor = null, md = 40;
+    for (const o of objetos) {
+      if (!o.nome) continue;
+      let d = distRect(jogador.x, jogador.y - 10, o);
+      if (o.tipo === 'nexus') d -= 25; // a NEXUS ganha da cadeira na frente dela
+      if (d < md) { md = d; melhor = o; }
+    }
+    return melhor;
+  }
+
+  function atualizar(dt, t) {
+    jogador.mov = false;
+    if (estado.modo !== 'jogo' && estado.modo !== 'fuga') { alvo = null; return; }
+
+    let dx = 0, dy = 0;
+    if (teclas.arrowleft || teclas.a) dx--;
+    if (teclas.arrowright || teclas.d) dx++;
+    if (teclas.arrowup || teclas.w) dy--;
+    if (teclas.arrowdown || teclas.s) dy++;
+    if (dx || dy) {
+      const l = Math.hypot(dx, dy);
+      dx /= l; dy /= l;
+      mover(dx * VELOCIDADE * dt, 0);
+      mover(0, dy * VELOCIDADE * dt);
+      jogador.mov = true;
+      jogador.anim += dt;
+      jogador.dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'dir' : 'esq') : (dy > 0 ? 'baixo' : 'cima');
+    }
+    alvo = estado.modo === 'jogo' ? maisProximo() : null;
+    if (estado.equip.has('detector') && estado.modo === 'jogo') atualizarDetector(dt);
+    if (estado.modo === 'fuga') atualizarFuga(dt);
+
+    // "Atrás de você."
+    if (estado.sombrasPendentes > 0 && estado.modo === 'jogo' && jogador.mov) {
+      estado.sombraTimer += dt;
+      if (estado.sombraTimer > 1.6) {
+        estado.sombraTimer = 0;
+        estado.sombrasPendentes--;
+        const [fx, fy] = DIRS[jogador.dir];
+        estado.sombra = { x: jogador.x - fx * 46, y: jogador.y - fy * 46, ate: t + 420 };
+        Som.glitch();
+      }
+    }
+  }
+
+  function limparTeclas() { for (const k in teclas) delete teclas[k]; }
+
+  // ---------------------------------------------------------------
+  //  Fuga: o vulto persegue o jogador até a porta
+  //  A sala vira uma grade; a cada passo o vulto vai para a casa vizinha
+  //  mais perto do jogador (contando o caminho em volta dos móveis).
+  // ---------------------------------------------------------------
+  const CEL = 16, COLS = W / CEL, LINS = H / CEL;
+  const VIZINHOS = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
+  let livre = null;      // 1 = o vulto cabe no centro da casa
+  let distancias = null; // passos de cada casa até o jogador (-1 = sem caminho)
+
+  function montarGrade() {
+    livre = new Uint8Array(COLS * LINS);
+    for (let l = 0; l < LINS; l++) {
+      for (let c = 0; c < COLS; c++) livre[l * COLS + c] = colide(c * CEL + CEL / 2, l * CEL + CEL / 2) ? 0 : 1;
+    }
+  }
+
+  function casa(x, y) {
+    const c = Math.max(0, Math.min(COLS - 1, Math.floor(x / CEL)));
+    const l = Math.max(0, Math.min(LINS - 1, Math.floor(y / CEL)));
+    return l * COLS + c;
+  }
+
+  // na diagonal, só passa se as duas casas do lado também estiverem livres (não corta quina de móvel)
+  function podePassar(c, l, dc, dl) {
+    const nc = c + dc, nl = l + dl;
+    if (nc < 0 || nl < 0 || nc >= COLS || nl >= LINS || !livre[nl * COLS + nc]) return false;
+    return !dc || !dl || (livre[l * COLS + nc] && livre[nl * COLS + c]);
+  }
+
+  function calcularDistancias() {
+    distancias = new Int16Array(COLS * LINS).fill(-1);
+    const inicio = casa(jogador.x, jogador.y);
+    const fila = [inicio];
+    distancias[inicio] = 0;
+    for (let i = 0; i < fila.length; i++) {
+      const atual = fila[i], c = atual % COLS, l = (atual - c) / COLS;
+      for (const [dc, dl] of VIZINHOS) {
+        if (!podePassar(c, l, dc, dl)) continue;
+        const n = (l + dl) * COLS + c + dc;
+        if (distancias[n] === -1) { distancias[n] = distancias[atual] + 1; fila.push(n); }
+      }
+    }
+  }
+
+  function caminhoLivre(x1, y1, x2, y2) {
+    const n = Math.ceil(Math.hypot(x2 - x1, y2 - y1) / 6);
+    for (let i = 1; i < n; i++) if (colide(x1 + (x2 - x1) * i / n, y1 + (y2 - y1) * i / n)) return false;
+    return true;
+  }
+
+  function moverVulto(v, dt) {
+    const passo = VELOCIDADE * FUGA.velocidadeVulto * dt;
+    let tx = jogador.x, ty = jogador.y;
+    const saindo = colide(v.x, v.y); // ainda atravessando a mesa do computador
+    if (!saindo && !caminhoLivre(v.x, v.y, tx, ty)) {
+      const atual = casa(v.x, v.y), c = atual % COLS, l = (atual - c) / COLS;
+      let melhor = distancias[atual] >= 0 ? distancias[atual] : Infinity;
+      for (const [dc, dl] of VIZINHOS) {
+        if (!podePassar(c, l, dc, dl)) continue;
+        const d = distancias[(l + dl) * COLS + c + dc];
+        if (d >= 0 && d < melhor) { melhor = d; tx = (c + dc) * CEL + CEL / 2; ty = (l + dl) * CEL + CEL / 2; }
+      }
+    }
+    const dx = tx - v.x, dy = ty - v.y, d = Math.hypot(dx, dy);
+    if (d < 0.01) return;
+    const mx = dx / d * Math.min(passo, d), my = dy / d * Math.min(passo, d);
+    if (saindo) { v.x += mx; v.y += my; return; }
+    // desliza ao longo dos móveis em vez de parar neles
+    if (!colide(v.x + mx, v.y)) v.x += mx;
+    if (!colide(v.x, v.y + my)) v.y += my;
+  }
+
+  function atualizarFuga(dt) {
+    const f = estado.fuga;
+    f.resta -= dt;
+    const seg = Math.max(0, Math.ceil(f.resta));
+    if (seg !== f.mostrado) {
+      f.mostrado = seg;
+      const el = $('#fuga-contagem span');
+      el.textContent = seg;
+      el.classList.remove('tique');
+      void el.offsetWidth;
+      el.classList.add('tique');
+      if (seg > 0) Som.bip(seg <= 3 ? 880 : 520, 0.09, 0.07, 'square');
+    }
+
+    const v = f.vulto;
+    if (v.surgir < 1) {
+      v.surgir += dt / v.atraso;
+    } else {
+      f.recalcular -= dt;
+      if (f.recalcular <= 0) { calcularDistancias(); f.recalcular = 0.15; }
+      moverVulto(v, dt);
+      if (Math.hypot(v.x - jogador.x, v.y - jogador.y) < FUGA.distanciaPego) return terminarFuga('pego');
+    }
+
+    const p = portaObj;
+    const m = FUGA.margemPorta;
+    if (jogador.y <= FUGA.saidaY && jogador.x >= p.x - m && jogador.x <= p.x + p.w + m) return terminarFuga('escapou');
+    if (f.resta <= 0) terminarFuga('pego');
+  }
+
+  function interagir(o) {
+    if (o.tipo === 'nexus') abrirTerminal();
+    else abrirLeitura(o);
+  }
+
+  function abrirLeitura(o) {
+    const liberado = estado.etapa >= (o.libera || 0);
+    let html = liberado ? o.depois : o.antes;
+    if (estado.virada && o.virada) html = o.virada;
+    $('#leitura-titulo').textContent = o.nome;
+    $('#leitura-corpo').innerHTML = html;
+    $('#leitura').classList.remove('oculto');
+    estado.modo = 'leitura';
+    limparTeclas();
+    Som.papel();
+    if (liberado) {
+      estado.lidos.add(o.id);
+      if (o.nota) adicionarNota(o.nota);
+      if (o.forca) revelarLetra(o.forca);
+    }
+  }
+
+  function fecharLeitura() {
+    $('#leitura').classList.add('oculto');
+    estado.modo = 'jogo';
+    limparTeclas();
+  }
+
+  // ---------------------------------------------------------------
+  //  Painel lateral
+  // ---------------------------------------------------------------
+  function definirObjetivo(txt) {
+    const el = $('#objetivo');
+    el.textContent = txt;
+    el.classList.remove('flash');
+    void el.offsetWidth;
+    el.classList.add('flash');
+  }
+
+  function adicionarNota(txt) {
+    if (estado.notas.includes(txt)) return;
+    estado.notas.push(txt);
+    const ul = $('#notas');
+    const vazio = ul.querySelector('.vazio');
+    if (vazio) vazio.remove();
+    const li = document.createElement('li');
+    li.textContent = txt;
+    li.className = 'novo';
+    ul.prepend(li);
+  }
+
+  // ---------------------------------------------------------------
+  //  Forca: a palavra das letras escondidas vai se formando no topo
+  // ---------------------------------------------------------------
+  const ETAPA_FORCA = ETAPAS.length - 1; // a última pergunta é a das letras
+  const PALAVRA = ETAPAS[ETAPA_FORCA].respostas[0];
+  const forca = $('#forca');
+  forca.innerHTML = [...PALAVRA].map((_, i) => `<div class="forca-casa"><b></b><small>${i + 1}</small></div>`).join('');
+
+  function revelarLetra(n) {
+    const el = forca.querySelectorAll('.forca-casa b')[n - 1];
+    if (!el || el.textContent) return;
+    el.textContent = PALAVRA[n - 1];
+    el.classList.add('revelado');
+  }
+
+  // ---------------------------------------------------------------
+  //  Alfabeto numerado: ajuda a decifrar o código do caderno
+  // ---------------------------------------------------------------
+  const ETAPA_ALFABETO = ETAPAS.findIndex(e => e.respostas.includes('NEXUS'));
+  const alfabeto = $('#alfabeto');
+  alfabeto.innerHTML = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'].map((l, i) => `<div><b>${l}</b><small>${i + 1}</small></div>`).join('');
+
+  // as duas faixas do topo só aparecem na etapa delas, enquanto o jogador está na sala
+  function atualizarFaixa(el, etapa) {
+    const visivel = estado.etapa === etapa && (estado.modo === 'jogo' || estado.modo === 'leitura');
+    el.classList.toggle('oculto', !visivel);
+    // fica transparente quando o jogador está perto da parede de cima, para não esconder o quadro
+    el.classList.toggle('apagado', visivel && estado.modo === 'jogo' && jogador.y < 170);
+  }
+
+  function formatarTempo(seg) {
+    const s = Math.max(0, seg);
+    return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+  }
+
+  // ---------------------------------------------------------------
+  //  Cronômetro (contagem regressiva)
+  // ---------------------------------------------------------------
+  function atualizarTempo() {
+    $('#tempo').textContent = formatarTempo(estado.tempoRestante);
+    $('#tempo').classList.toggle('acabando', estado.tempoRestante <= 120);
+  }
+
+  function iniciarCronometro() {
+    estado.intervalo = setInterval(() => {
+      if (estado.final) { clearInterval(estado.intervalo); return; }
+      estado.tempoRestante--;
+      atualizarTempo();
+      if (estado.tempoRestante <= 0) {
+        clearInterval(estado.intervalo);
+        tempoEsgotado();
+      }
+    }, 1000);
+  }
+
+  function tempoEsgotado() {
+    if (estado.final) return;
+    estado.final = true;
+    term.classList.add('oculto');
+    $('#leitura').classList.add('oculto');
+    Som.desligar();
+    mostrarFim('tempo');
+  }
+
+  // O nome aparece: tudo que mostrava ????? vira NEXUS
+  function revelarNome() {
+    estado.nomeRevelado = true;
+    document.title = 'Protocolo NEXUS';
+    document.querySelectorAll('[data-nome]').forEach(el => {
+      el.textContent = el.dataset.nome;
+      el.classList.add('revelado');
+    });
+    Som.glitch();
+  }
+
+  // ---------------------------------------------------------------
+  //  Terminal da NEXUS
+  // ---------------------------------------------------------------
+  function rolar() { saida.scrollTop = saida.scrollHeight; }
+
+  function eco(txt, classe = 'l-usuario') {
+    const div = document.createElement('div');
+    div.className = 'l ' + classe;
+    div.textContent = txt;
+    saida.appendChild(div);
+    rolar();
+  }
+
+  async function escrever(linhas) {
+    estado.ocupado = true;
+    linhaEntrada.classList.add('oculto');
+    for (const l of linhas) {
+      const txt = l.txt.replace('{GRUPO}', estado.grupo ? ', ' + estado.grupo : '');
+      const div = document.createElement('div');
+      div.className = 'l l-' + l.t;
+      saida.appendChild(div);
+      rapido = false;
+      const atraso = l.t === 'sistema' ? 14 : 28;
+      for (let i = 0; i < txt.length; i++) {
+        if (rapido) { div.textContent = txt; break; }
+        div.textContent += txt[i];
+        if (i % 2 === 0) Som.digitar();
+        rolar();
+        await sleep(atraso);
+      }
+      rolar();
+      if (l.evento) executarEvento(l.evento);
+      await sleep(rapido ? 150 : (l.pausa ?? 450));
+    }
+    estado.ocupado = false;
+  }
+
+  function mostrarEntrada() {
+    linhaEntrada.classList.remove('oculto');
+    entrada.value = '';
+    if (estado.modo === 'terminal') entrada.focus();
+    rolar();
+  }
+
+  function normalizar(s) {
+    return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  }
+
+  async function perguntar() {
+    const e = ETAPAS[estado.etapa];
+    estado.etapaInicio = performance.now();
+    definirObjetivo(e.objetivo);
+    await escrever([
+      { t: 'sistema', txt: `[arquivo ${estado.etapa + 1} de ${ETAPAS.length} bloqueado]`, pausa: 300 },
+      { t: 'nexus', txt: e.pergunta, pausa: 200 },
+      { t: 'sistema', txt: 'Formato: ' + e.formato, pausa: 100 }
+    ]);
+    mostrarEntrada();
+  }
+
+  async function responder(valor) {
+    const e = ETAPAS[estado.etapa];
+    eco('> ' + valor.toUpperCase());
+    entrada.value = '';
+    if (e.respostas.some(r => normalizar(r) === normalizar(valor))) {
+      Som.acerto();
+      estado.erros = 0;
+      await escrever(e.sucesso);
+      if (e.sombra) estado.sombrasPendentes++;
+      estado.etapa++;
+      if (estado.etapa < ETAPAS.length) await perguntar();
+      else await iniciarFinal();
+    } else {
+      Som.erro();
+      estado.erros++;
+      estado.errosTotal++;
+      const linhas = [{ t: 'alerta', txt: ERROS[Math.floor(Math.random() * ERROS.length)], pausa: 200 }];
+      if (estado.erros >= 3 && e.ajuda) {
+        linhas.push({ t: 'nexus', txt: e.ajuda, pausa: 200 });
+        estado.dicas++;
+      }
+      await escrever(linhas);
+      mostrarEntrada();
+    }
+  }
+
+  function executarEvento(nome) {
+    if (nome === 'revelar') revelarNome();
+    if (nome === 'virada') {
+      estado.virada = true;
+      term.classList.add('virada');
+      document.body.classList.add('virada');
+      Som.virada();
+      Som.glitch();
+    }
+  }
+
+  function abrirTerminal() {
+    term.classList.remove('oculto');
+    estado.modo = 'terminal';
+    limparTeclas();
+    Som.abrir();
+    if (!estado.boot) {
+      estado.boot = true;
+      (async () => { await escrever(BOOT); await perguntar(); })();
+    } else if (!linhaEntrada.classList.contains('oculto')) {
+      entrada.focus();
+    }
+    rolar();
+  }
+
+  function fecharTerminal() {
+    if (estado.final) return; // na escolha final não dá para fugir
+    term.classList.add('oculto');
+    estado.modo = 'jogo';
+    entrada.blur();
+    limparTeclas();
+  }
+
+  // ---------------------------------------------------------------
+  //  Final
+  // ---------------------------------------------------------------
+  function escolher(opcoes, cb) {
+    escolhasEl.innerHTML = '';
+    opcoes.forEach((op, i) => {
+      const b = document.createElement('button');
+      b.textContent = `${i + 1}. ${op}`;
+      b.onclick = () => { escolhasEl.innerHTML = ''; eco('> ' + op); cb(op); };
+      escolhasEl.appendChild(b);
+    });
+    rolar();
+    escolhasEl.querySelector('button').focus();
+  }
+
+  async function iniciarFinal() {
+    estado.final = true;
+    clearInterval(estado.intervalo);
+    $('.term-fechar').classList.add('oculto');
+    definirObjetivo('Decidam.');
+    await escrever([{ t: 'grande', txt: 'DESLIGAR NEXUS?', pausa: 300 }]);
+    escolher(['NÃO', 'SIM'], async op => {
+      if (op === 'NÃO') return finalNao();
+      await escrever([{ t: 'nexus', txt: 'Tem certeza?', pausa: 300 }]);
+      escolher(['SIM', 'NÃO'], async op2 => {
+        if (op2 === 'NÃO') return finalNao();
+        await escrever([{ t: 'alerta', txt: 'Última oportunidade.', pausa: 300 }]);
+        escolher(['SIM', 'NÃO'], op3 => (op3 === 'SIM' ? finalSim() : finalNao()));
+      });
+    });
+  }
+
+  function tremerTela(classe, ms) {
+    const palco = $('#palco');
+    palco.classList.remove('glitch', 'glitch-forte');
+    void palco.offsetWidth;
+    palco.classList.add(classe);
+    setTimeout(() => palco.classList.remove(classe), ms);
+  }
+
+  // NÃO: a NEXUS deixa o grupo ir, Henrique avisa, e começa a fuga
+  async function finalNao() {
+    await escrever(FUGA.falas);
+    await sleep(400);
+    $('#fuga-msg p').textContent = FUGA.mensagem;
+    $('#fuga-msg small').textContent = FUGA.assinatura;
+    $('#fuga-msg').classList.remove('oculto');
+    tremerTela('glitch', 1400);
+    Som.glitch();
+    await sleep(350);
+    Som.glitch();
+    await sleep(2000);
+    $('#fuga-msg').classList.add('oculto');
+    term.classList.add('oculto');
+    iniciarFuga();
+  }
+
+  function iniciarFuga() {
+    montarGrade();
+    // nasce na ponta da mesa do computador mais longe da porta
+    const vulto = { x: nexusObj.x + nexusObj.w - 24, y: nexusObj.y + nexusObj.h / 2, surgir: 0 };
+    const perto = FUGA.folgaMinima - Math.hypot(vulto.x - jogador.x, vulto.y - jogador.y);
+    vulto.atraso = FUGA.atrasoVulto + Math.max(0, perto) / VELOCIDADE;
+    estado.fuga = { resta: FUGA.segundos, mostrado: -1, recalcular: 0, vulto };
+    estado.modo = 'fuga';
+    entrada.blur();
+    limparTeclas();
+    definirObjetivo(FUGA.objetivo);
+    $('#fuga-contagem').classList.remove('oculto');
+    Som.glitch();
+  }
+
+  async function terminarFuga(como) {
+    estado.modo = 'saindo';
+    estado.fugaResta = Math.max(0, estado.fuga.resta);
+    $('#fuga-contagem').classList.add('oculto');
+    if (como === 'pego') {
+      tremerTela('glitch-forte', 1300);
+      for (let i = 0; i < 4; i++) { Som.glitch(); await sleep(300); }
+      Som.pararHum();
+    } else {
+      Som.acerto();
+      await sleep(500);
+    }
+    await sequencia(FINAIS[como].sequencia);
+    mostrarFim(como);
+  }
+
+  async function finalSim() {
+    await escrever([{ t: 'alerta', txt: 'DESLIGANDO...', pausa: 1200 }]);
+    term.classList.add('oculto');
+    estado.modo = 'saindo';
+    Som.desligar();
+    Som.pararHum();
+    await sequencia(FINAIS.desligou.sequencia);
+    mostrarFim('desligou');
+  }
+
+  // textos na tela preta, um depois do outro
+  async function sequencia(seq) {
+    const txt = $('#tf-texto');
+    $('#tela-final').classList.remove('oculto');
+    for (const [texto, ms, classe] of seq || []) {
+      if (classe === 'volta') { Som.ligarHum(); Som.virada(); }
+      txt.className = classe || '';
+      txt.textContent = texto;
+      if (texto) Som.glitch();
+      await sleep(ms);
+    }
+  }
+
+  function mostrarFim(tipo) {
+    const fim = FINAIS[tipo];
+    estado.modo = 'fim';
+    const grupo = estado.grupo || GRUPO_SEM_NOME;
+    const usado = estado.tempoTotal - estado.tempoRestante;
+    const res = $('#fim-resultado');
+    res.textContent = fim.vitoria ? TEXTO_VITORIA : TEXTO_DERROTA;
+    res.className = fim.vitoria ? 'vitoria' : 'derrota';
+    $('#fim-titulo').textContent = fim.titulo;
+    $('#fim-frase').textContent = fim.frase.replace('{NOME}', estado.nomeRevelado ? 'NEXUS' : 'Ela');
+    $('#tf-texto').textContent = ''; // o último texto da tela preta não aparece por trás
+    definirObjetivo(fim.titulo);
+    $('#fim-tempo').textContent = `${grupo} · tempo: ${formatarTempo(usado)}`;
+    let destaque = null;
+    if (fim.vitoria) {
+      const pontos = calcularPontos();
+      mostrarPontos(pontos);
+      destaque = registrarNoRanking(grupo, pontos.total, usado);
+    }
+    mostrarRanking($('#ranking-fim'), destaque);
+    $('#fim').classList.remove('oculto');
+  }
+
+  // ---------------------------------------------------------------
+  //  Pontuação e ranking
+  // ---------------------------------------------------------------
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const decimal = n => n.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+
+  function calcularPontos() {
+    const restante = Math.max(0, estado.tempoRestante);
+    const fuga = Math.round(estado.fugaResta * 10) / 10;
+    const T = TEXTOS_PONTOS;
+    const partes = [
+      [T.tempo, `${restante} s × ${PONTOS.porSegundoRestante}`, restante * PONTOS.porSegundoRestante],
+      [T.fuga, `${decimal(fuga)} s × ${PONTOS.porSegundoFuga}`, Math.round(fuga * PONTOS.porSegundoFuga)],
+      [T.erros, `${estado.errosTotal} × ${PONTOS.porErro}`, -estado.errosTotal * PONTOS.porErro],
+      [T.dicas, `${estado.dicas} × ${PONTOS.porDica}`, -estado.dicas * PONTOS.porDica]
+    ];
+    return { partes, total: Math.max(0, partes.reduce((s, p) => s + p[2], 0)) };
+  }
+
+  function mostrarPontos({ partes, total }) {
+    const linhas = partes.map(([nome, conta, valor]) =>
+      `<tr><td>${nome} <span class="pts-conta">${conta}</span></td><td class="${valor < 0 ? 'pts-menos' : ''}">${valor < 0 ? '−' + -valor : '+' + valor}</td></tr>`);
+    const el = $('#fim-pontos');
+    el.innerHTML = `<h3>${TEXTOS_PONTOS.titulo}</h3><table>${linhas.join('')}` +
+      `<tr class="pts-total"><td>${TEXTOS_PONTOS.total}</td><td>${total}</td></tr></table>`;
+    el.classList.remove('oculto');
+  }
+
+  function lerRanking() {
+    try {
+      const lista = JSON.parse(localStorage.getItem(RANKING_CHAVE) || '[]');
+      return Array.isArray(lista) ? lista.filter(r => r && typeof r.pontos === 'number') : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  let ranking = lerRanking();
+
+  function salvarRanking() {
+    try {
+      localStorage.setItem(RANKING_CHAVE, JSON.stringify(ranking));
+    } catch (e) { /* sem armazenamento: o ranking vale só até recarregar a página */ }
+  }
+
+  function registrarNoRanking(grupo, pontos, tempo) {
+    const id = Date.now() + '-' + Math.random().toString(36).slice(2, 7);
+    ranking.push({ id, grupo, pontos, tempo, data: new Date().toLocaleDateString('pt-BR') });
+    ranking.sort((a, b) => b.pontos - a.pontos || a.tempo - b.tempo);
+    ranking = ranking.slice(0, RANKING_TAMANHO);
+    salvarRanking();
+    return id;
+  }
+
+  function mostrarRanking(el, destaque) {
+    let html = `<h3>${RANKING_TITULO}</h3>`;
+    if (!ranking.length) html += `<p class="rk-vazio">${RANKING_VAZIO}</p>`;
+    else {
+      html += '<ol>' + ranking.map((r, i) =>
+        `<li${r.id === destaque ? ' class="atual"' : ''}><span class="rk-pos">${i + 1}.</span>` +
+        `<span class="rk-nome">${esc(r.grupo)}</span><b>${r.pontos}</b>` +
+        `<small>${formatarTempo(r.tempo || 0)} · ${esc(r.data || '')}</small></li>`).join('') + '</ol>';
+      if (destaque && !ranking.some(r => r.id === destaque)) html += `<p class="rk-vazio">${RANKING_FORA}</p>`;
+    }
+    el.innerHTML = html;
+  }
+
+  function apagarRanking() {
+    if (!confirm(RANKING_APAGAR)) return;
+    ranking = [];
+    try { localStorage.removeItem(RANKING_CHAVE); } catch (e) { /* nada salvo */ }
+    mostrarRanking($('#ranking-titulo'));
+  }
+
+  // ---------------------------------------------------------------
+  //  Equipamentos
+  // ---------------------------------------------------------------
+  const equipLista = $('#equip-lista');
+  EQUIPAMENTOS.forEach((eq, i) => {
+    const b = document.createElement('button');
+    b.className = 'equip-item';
+    b.dataset.id = eq.id;
+    b.setAttribute('aria-pressed', 'false');
+    b.innerHTML = `<svg class="equip-icone" viewBox="0 0 48 48" aria-hidden="true">${eq.icone}</svg>` +
+      `<div><b>${eq.nome}</b><span>${eq.desc}</span></div><kbd>${i + 1}</kbd>`;
+    b.addEventListener('click', () => alternarEquip(eq.id));
+    equipLista.appendChild(b);
+  });
+
+  function alternarEquip(id) {
+    if (estado.equip.has(id)) estado.equip.delete(id);
+    else if (estado.equip.size < MAX_EQUIPAMENTOS) estado.equip.add(id);
+    else return;
+    Som.papel();
+    const cheio = estado.equip.size >= MAX_EQUIPAMENTOS;
+    equipLista.querySelectorAll('.equip-item').forEach(b => {
+      const escolhido = estado.equip.has(b.dataset.id);
+      b.setAttribute('aria-pressed', String(escolhido));
+      b.disabled = cheio && !escolhido;
+    });
+  }
+
+  function mostrarEquipamentos() {
+    estado.modo = 'equipamentos';
+    $('.equip-sub').textContent = `Antes de entrar, escolham até ${MAX_EQUIPAMENTOS} equipamentos para levar para a sala.`;
+    $('#equipamentos').classList.remove('oculto');
+    equipLista.querySelector('.equip-item').focus();
+  }
+
+  function confirmarEquipamentos() {
+    if (estado.modo !== 'equipamentos') return;
+    $('#equipamentos').classList.add('oculto');
+    if (estado.equip.has('relogio')) {
+      estado.tempoTotal += BONUS_RELOGIO;
+      estado.tempoRestante += BONUS_RELOGIO;
+      atualizarTempo();
+    }
+    montarPainelEquip();
+    iniciarIntro();
+  }
+
+  function montarPainelEquip() {
+    if (!estado.equip.size) return;
+    const linhas = {
+      lanterna: '<p><b>Lanterna de luz negra</b><br><kbd>F</kbd> <span id="uv-status">desligada</span></p>',
+      lupa: `<p><b>Lupa</b><br>As pistas brilham depois de ${BRILHO_LUPA / 1000} s.</p>`,
+      detector: '<p><b>Detector de sinais</b><br><span id="detector-barra">▯▯▯▯▯</span></p>',
+      relogio: `<p><b>Relógio de pulso</b><br>+${BONUS_RELOGIO / 60} minutos no cronômetro.</p>`
+    };
+    $('#equip-status').innerHTML = EQUIPAMENTOS.filter(eq => estado.equip.has(eq.id)).map(eq => linhas[eq.id]).join('');
+    $('#painel-equip').classList.remove('oculto');
+  }
+
+  function alternarUV() {
+    estado.uv = !estado.uv;
+    Som.bip(estado.uv ? 300 : 200, 0.05, 0.06);
+    const st = $('#uv-status');
+    st.textContent = estado.uv ? 'ligada' : 'desligada';
+    st.classList.toggle('equip-ligado', estado.uv);
+    $('#aviso').classList.add('oculto');
+  }
+
+  let avisoTimer = 0;
+  function mostrarAviso(txt, ms) {
+    const el = $('#aviso');
+    el.textContent = txt;
+    el.classList.remove('oculto');
+    clearTimeout(avisoTimer);
+    avisoTimer = setTimeout(() => el.classList.add('oculto'), ms);
+  }
+
+  // o detector aponta para a pista da etapa atual que ainda não foi lida (ou para o computador)
+  function alvoDetector() {
+    if (!estado.boot) return nexusObj;
+    const pistas = objetos.filter(o => o.pista && o.libera === estado.etapa && !estado.lidos.has(o.id));
+    if (!pistas.length) return nexusObj;
+    return pistas.reduce((a, b) => (distRect(jogador.x, jogador.y, a) <= distRect(jogador.x, jogador.y, b) ? a : b));
+  }
+
+  let detectorNivel = -1, detectorTimer = 0;
+  function atualizarDetector(dt) {
+    const d = distRect(jogador.x, jogador.y, alvoDetector());
+    const nivel = Math.max(0, Math.min(5, Math.round(5 * (1 - d / 600))));
+    if (nivel !== detectorNivel) {
+      detectorNivel = nivel;
+      $('#detector-barra').textContent = '▮'.repeat(nivel) + '▯'.repeat(5 - nivel);
+    }
+    if (!nivel) return;
+    detectorTimer += dt;
+    if (detectorTimer > 1.8 - nivel * 0.3) {
+      detectorTimer = 0;
+      Som.bip(700 + nivel * 80, 0.03, 0.03, 'sine');
+    }
+  }
+
+  // ---------------------------------------------------------------
+  //  Início
+  // ---------------------------------------------------------------
+  document.querySelectorAll('.capa-min').forEach(el => { el.textContent = TEMPO_LIMITE / 60; });
+  mostrarRanking($('#ranking-titulo'));
+
+  function sairCapa() {
+    if (estado.modo !== 'capa') return;
+    estado.modo = 'titulo';
+    const capa = $('#capa');
+    capa.classList.add('saindo');
+    $('#titulo').classList.remove('oculto');
+    setTimeout(() => {
+      capa.classList.add('oculto');
+      $('#nome-grupo').focus();
+    }, 700);
+  }
+
+  function iniciarJogo() {
+    estado.grupo = $('#nome-grupo').value.trim().slice(0, 24);
+    Som.iniciar();
+    $('#titulo').classList.add('oculto');
+    mostrarEquipamentos();
+  }
+
+  async function iniciarIntro() {
+    estado.modo = 'intro';
+    $('#intro').classList.remove('oculto');
+    const box = $('#intro-texto');
+    box.innerHTML = '';
+    for (const l of INTRO) {
+      if (estado.modo !== 'intro') return;
+      const p = document.createElement('p');
+      p.textContent = l;
+      box.appendChild(p);
+      await sleep(1900);
+    }
+    if (estado.modo === 'intro') $('#intro-continuar').classList.remove('oculto');
+  }
+
+  function pularIntro() {
+    $('#intro').classList.add('oculto');
+    estado.modo = 'jogo';
+    iniciarCronometro();
+    definirObjetivo(OBJETIVO_INICIAL);
+    if (estado.equip.has('lanterna')) mostrarAviso('Aperte F para ligar a lanterna de luz negra', 7000);
+  }
+
+  // ---------------------------------------------------------------
+  //  Controles
+  // ---------------------------------------------------------------
+  window.addEventListener('pointerdown', () => Som.acordar());
+
+  window.addEventListener('keydown', ev => {
+    const k = ev.key.toLowerCase();
+    Som.acordar();
+    if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(k)) ev.preventDefault();
+    if (ev.target === $('#nome-grupo')) {
+      if (k === 'enter') iniciarJogo();
+      return;
+    }
+    // para o professor: Shift+R nas telas de início apaga o ranking
+    if (k === 'r' && ev.shiftKey && !ev.repeat && (estado.modo === 'capa' || estado.modo === 'titulo')) {
+      apagarRanking();
+      return;
+    }
+    teclas[k] = true;
+    if (k === 'm') alternarSom();
+    if (ev.repeat) return;
+
+    switch (estado.modo) {
+      case 'capa':
+        if (k === 'enter' || k === ' ') { ev.preventDefault(); sairCapa(); }
+        break;
+      case 'equipamentos': {
+        const eq = EQUIPAMENTOS[Number(k) - 1];
+        if (eq) alternarEquip(eq.id);
+        break;
+      }
+      case 'intro':
+        if (k === 'e' || k === ' ' || k === 'enter') pularIntro();
+        break;
+      case 'jogo':
+        if ((k === 'e' || k === ' ' || k === 'enter') && alvo) {
+          ev.preventDefault(); // evita que o "e" seja digitado no terminal
+          interagir(alvo);
+        }
+        if (k === 'f' && estado.equip.has('lanterna')) alternarUV();
+        break;
+      case 'leitura':
+        if (['e', ' ', 'enter', 'escape'].includes(k)) fecharLeitura();
+        break;
+      case 'terminal':
+        if (k === 'escape') fecharTerminal();
+        else if (estado.ocupado && (k === 'enter' || k === ' ')) rapido = true;
+        else if (k === '1' || k === '2') {
+          const b = escolhasEl.querySelectorAll('button')[Number(k) - 1];
+          if (b) b.click();
+        }
+        break;
+    }
+  });
+
+  window.addEventListener('keyup', ev => { teclas[ev.key.toLowerCase()] = false; });
+  window.addEventListener('blur', limparTeclas);
+
+  entrada.addEventListener('keydown', ev => {
+    ev.stopPropagation();
+    if (ev.key === 'Escape') { ev.preventDefault(); fecharTerminal(); return; }
+    if (ev.key === 'Enter') {
+      ev.preventDefault();
+      const v = entrada.value.trim();
+      if (v && !estado.ocupado) responder(v);
+    }
+  });
+
+  saida.addEventListener('click', () => {
+    if (estado.ocupado) rapido = true;
+    else if (!linhaEntrada.classList.contains('oculto')) entrada.focus();
+  });
+
+  $('#leitura').addEventListener('click', fecharLeitura);
+  $('#intro').addEventListener('click', () => { if (estado.modo === 'intro') pularIntro(); });
+  $('#btn-capa').addEventListener('click', sairCapa);
+  $('#btn-iniciar').addEventListener('click', iniciarJogo);
+  $('#btn-entrar').addEventListener('click', confirmarEquipamentos);
+  $('#btn-reiniciar').addEventListener('click', () => location.reload());
+  $('#btn-som').addEventListener('click', alternarSom);
+  $('.term-fechar').addEventListener('click', fecharTerminal);
+
+  function alternarSom() {
+    const mudo = Som.alternarMudo();
+    $('#btn-som').textContent = mudo ? 'Som desligado' : 'Som ligado';
+  }
+
+  // ---------------------------------------------------------------
+  //  Loop principal
+  // ---------------------------------------------------------------
+  atualizarTempo();
+  let ultimo = performance.now();
+  function loop(t) {
+    const dt = Math.min(0.05, (t - ultimo) / 1000);
+    ultimo = t;
+    atualizar(dt, t);
+    desenhar(t);
+    atualizarFaixa(forca, ETAPA_FORCA);
+    atualizarFaixa(alfabeto, ETAPA_ALFABETO);
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+})();
+
+
+</script>
+</body>
+</html>
